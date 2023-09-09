@@ -1,1 +1,16 @@
-/home/kuba/Projects/org/roam/20230909121951-uhackathons.org
+:PROPERTIES:
+:ID:       1329e05c-209e-4965-9229-2f07582c42e7
+:END:
+#+title: uhackathons
+
+* lmcli
+
+Modify examples from [[https://github.com/huggingface/candle][candle]] (Rust library) to run on batch et c
+
+** features
+
+*** TODO run a model on prompts from JSON
+
+*** TODO make Elixir bindings
+
+*** TODO Elixir livebook example
