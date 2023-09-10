@@ -1,0 +1,18 @@
+[project]
+name = "neucgraph"
+version = "0.1.0"
+description = "Add a short description here"
+authors = ["Jakub 'lambdaofgod' Bartczuk <bartczukkuba@gmail.com>"]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tasks]
+
+[dependencies]
+gensim = "4.3.2.*"
+ipykernel = "6.25.2.*"
+pandas = "2.1.0.*"
+pyarrow = "13.0.0.*"
+matplotlib = "3.7.2.*"
+pip = "23.2.1.*"
+bokeh = "3.2.2.*"

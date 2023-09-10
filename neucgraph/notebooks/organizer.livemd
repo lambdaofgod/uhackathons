@@ -1,0 +1,199 @@
+# Organizer
+
+```elixir
+Mix.install([
+  {:explorer, "~> 0.7.0"}
+])
+
+org_path = "~/Projects/org"
+
+org_path
+|> Path.expand()
+|> File.cd!()
+```
+
+## Section
+
+```elixir
+[_, fname | fnames] = Path.wildcard("roam/*") |> Enum.reject(&File.dir?/1)
+fnames
+```
+
+```elixir
+defmodule OrgUtils do
+  def try_get_file_id(contents) do
+    lines = contents |> String.split("\n")
+
+    id_line =
+      lines
+      |> Enum.find(fn line ->
+        line |> String.starts_with?(":ID:")
+      end)
+
+    case id_line do
+      nil -> nil
+      _ -> id_line |> String.replace(":ID:", "") |> String.trim()
+    end
+  end
+
+  def zip_with_nonnil_values(enum, f) do
+    for value <- enum, f.(value) != nil do
+      {value, f.(value)}
+    end
+  end
+
+  def read_lines(path) do
+    path
+    |> File.read!()
+    |> String.split("\n")
+  end
+
+  def get_link_ids_from_line(line) do
+    ~r"\[\[id:.*\]\]"
+    |> Regex.run(line)
+    |> nil_to_empty_list()
+    |> Enum.map(&extract_id/1)
+  end
+
+  defp extract_id(id_pattern) do
+    id_pattern
+    |> String.replace(~r"].*", "")
+    |> String.replace(~r"\[\[id:", "")
+  end
+
+  def get_links(ids_to_files) do
+    fnames = ids_to_files |> Map.values()
+
+    fnames_to_links =
+      for fname <- fnames do
+        linked_fnames =
+          fname
+          |> read_lines()
+          |> Enum.flat_map(&get_link_ids_from_line/1)
+          |> Enum.flat_map(fn id ->
+            ids_to_files |> Map.get(id) |> convert_value_to_singleton()
+          end)
+
+        {fname, linked_fnames}
+      end
+
+    fnames_to_links
+    |> Enum.reject(fn {_, ids} -> ids == [] end)
+    |> Map.new()
+  end
+
+  defp nil_to_empty_list(nil), do: []
+  defp nil_to_empty_list(other), do: other
+
+  def convert_value_to_singleton(nil), do: []
+  def convert_value_to_singleton(other), do: [other]
+end
+```
+
+```elixir
+import OrgUtils
+
+files_to_ids =
+  fnames
+  |> zip_with_nonnil_values(fn fname -> fname |> File.read!() |> try_get_file_id() end)
+  |> Map.new()
+
+ids_to_files =
+  for {fname, id} <- files_to_ids, into: %{} do
+    {id, fname}
+  end
+```
+
+```elixir
+lines = "roam/20230303100438-small_data_nlp.org" |> OrgUtils.read_lines()
+
+[id_pat] = lines |> Enum.flat_map(&get_link_ids_from_line/1)
+```
+
+```elixir
+lines
+```
+
+```elixir
+# all_ids = ids_by_files |> Map.keys()
+```
+
+```elixir
+files_to_links = get_links(ids_to_files)
+```
+
+```elixir
+files_to_links
+```
+
+```elixir
+files_to_links |> Enum.count()
+```
+
+```elixir
+files_to_links
+|> Enum.map(fn {_, gp} -> gp |> Enum.count() end)
+|> Enum.sum()
+```
+
+```elixir
+
+```
+
+```elixir
+defmodule RoamPathUtils do
+  def get_path_record(p, key_prefix \\ "") do
+    splits =
+      ~r"\d+"
+      |> Regex.split(p, include_captures: true, parts: 2)
+      |> Enum.map(fn s -> s |> String.trim("/") |> String.trim("-") end)
+
+    splits |> inspect() |> IO.puts()
+
+    raw_dict =
+      case splits do
+        [root_path, date, name] ->
+          %{"root_path" => root_path, "date" => date, "name" => name, "path" => p}
+
+        [date, name] ->
+          %{"date" => date, "name" => name, "path" => p}
+
+        _ ->
+          %{"path" => p}
+      end
+
+    for {k, v} <- raw_dict, into: %{} do
+      {key_prefix <> k, v}
+    end
+  end
+end
+```
+
+```elixir
+roam_link_graph_records =
+  for {source, destinations} <- files_to_links, dest <- destinations do
+    source_record = RoamPathUtils.get_path_record(source, "source_")
+    dest_record = RoamPathUtils.get_path_record(dest, "destination_")
+    source_record |> Map.merge(dest_record)
+  end
+```
+
+```elixir
+filtered_roam_link_graph_records =
+  roam_link_graph_records
+  |> Enum.filter(fn rec -> rec |> Map.keys() |> Enum.count() == 8 end)
+```
+
+```elixir
+roam_links_df =
+  filtered_roam_link_graph_records
+  |> Explorer.DataFrame.new()
+```
+
+```elixir
+File.cwd!()
+```
+
+```elixir
+roam_links_df |> Explorer.DataFrame.to_parquet!("../data/org_roam_records_2023_09_10.parquet")
+```

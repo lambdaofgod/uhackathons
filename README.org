@@ -9,8 +9,8 @@ Modify examples from [[https://github.com/huggingface/candle][candle]] (Rust lib
 
 ** features
 
-*** TODO run a model on prompts from JSON
+*** [ ] run a model on prompts from JSON
 
-*** TODO make Elixir bindings
+*** [ ] make Elixir bindings
 
-*** TODO Elixir livebook example
+*** [ ] Elixir livebook example
