@@ -1,0 +1,30 @@
+[package]
+name = "candlex"
+version = "0.1.0"
+authors = ["Jakub 'lambdaofgod' Bartczuk"]
+edition = "2021"
+
+[lib]
+name = "candlex"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+rand = "0.8.5"
+rand_distr = "0.4.3"
+rustler = {version = "0.29.1", features = ["derive"], default-features = false}
+anyhow = { version = "1", features = ["backtrace"] }
+hf-hub = "0.3.0"
+tokenizers = { version = "0.13.4" }
+clap = { version = "4.2.4", features = ["derive"] }
+serde = { version = "1.0.171", features = ["derive"] }
+serde_json = "1.0.99"
+candle-core = { git = "https://github.com/huggingface/candle.git", version = "0.2.3", features = ["cuda"] }
+candle-nn = { git = "https://github.com/huggingface/candle.git", version = "0.2.3" }
+candle-transformers = { git = "https://github.com/huggingface/candle.git", version = "0.2.3" }
+lazy_static = "1.4.0"
+cudarc = {version = "0.9.14", optional = true}
+candle-kernels = { version = "0.2.2", optional = true }
+
+[features]
+cuda = ["cudarc", "dep:candle-kernels"]
