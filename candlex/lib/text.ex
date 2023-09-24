@@ -8,7 +8,7 @@ defmodule Candlex.TextGenerationModel do
     top_p = opts[:top_p] || 1.0
     seed = opts[:seed] || 0
     temperature = opts[:temperature]
-    model_name |> Candlex.TextGenerationModel.Native.initialize_model(
+    {:ok, _} = model_name |> Candlex.TextGenerationModel.Native.initialize_model(
       model_path,
       cpu,
       temperature,

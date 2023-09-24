@@ -13,6 +13,7 @@ TODO:
 * [x] cuda feature
 * [x] cuda does not hang when we disconnect
 * [x] models are cleaned on disconnect
+* [x] add error when creating model fails
 * [ ] issue with caching tensors in candle
   the problem is the cache should not be used on first step
 * [ ] optional cuda feature in rustler
