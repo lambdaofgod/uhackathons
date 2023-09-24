@@ -36,7 +36,7 @@ pub fn generate_text<'a>(
     prompt: &str,
     sample_len: usize,
 ) -> Result<Vec<String>> {
-    text_generator.borrow_mut().run(prompt, sample_len)
+    text_generator.borrow_mut().run(prompt, sample_len, None)
 }
 
 pub fn make_wrapper(
@@ -121,7 +121,12 @@ impl TextGeneration {
         ))
     }
 
-    pub fn run(&mut self, prompt: &str, sample_len: usize) -> Result<Vec<String>> {
+    pub fn run(
+        &mut self,
+        prompt: &str,
+        sample_len: usize,
+        use_cache: Option<bool>,
+    ) -> Result<Vec<String>> {
         println!("starting the inference loop");
         print!("{prompt}");
         let mut tokens = self
@@ -130,12 +135,13 @@ impl TextGeneration {
             .map_err(E::msg)?
             .get_ids()
             .to_vec();
+        let do_use_cache = use_cache.unwrap_or(self.model.config().use_cache);
 
         let mut new_tokens = vec![];
         let mut out_tokens = vec![];
         let start_gen = std::time::Instant::now();
         for index in 0..sample_len {
-            let (context_size, past_len) = if self.model.config().use_cache && index > 0 {
+            let (context_size, past_len) = if do_use_cache && index > 0 {
                 (1, tokens.len().saturating_sub(1))
             } else {
                 (tokens.len(), 0)

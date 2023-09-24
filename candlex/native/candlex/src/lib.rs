@@ -77,6 +77,6 @@ fn on_load(env: Env, _info: Term) -> bool {
 }
 
 rustler::init!(
-    "Elixir.Candlex.TextGenerationModel",
+    "Elixir.Candlex.TextGenerationModel.Native",
     [initialize_model, generate_text]
 );
