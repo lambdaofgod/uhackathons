@@ -1,0 +1,18 @@
+# Candlex
+
+```elixir
+Mix.install([
+  {:candlex, path: __DIR__ |> Path.dirname() |> Path.join("")}
+])
+```
+
+## Section
+
+```elixir
+model_name = :starcoder
+text_generator = Candlex.TextGenerationModel.new(:starcoder, cpu: false)
+```
+
+```elixir
+text_generator |> Candlex.TextGenerationModel.generate("a cat walks into a bar", 100)
+```
