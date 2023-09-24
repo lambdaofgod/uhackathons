@@ -6,12 +6,28 @@ Mix.install([
 ])
 ```
 
-## Section
+## Elixir bindings for candle
+
+TODO:
+
+* [x] cuda feature
+* [x] cuda does not hang when we disconnect
+* [x] models are cleaned on disconnect
+* [ ] issue with caching tensors in candle
+  the problem is the cache should not be used on first step
+* [ ] optional cuda feature in rustler
+* [ ] deleting models
 
 ```elixir
 model_name = :starcoder
 text_generator = Candlex.TextGenerationModel.new(:starcoder, cpu: false)
 ```
+
+```elixir
+text_generator |> Candlex.TextGenerationModel.generate("a cat walks into a bar", 100)
+```
+
+
 
 ```elixir
 text_generator |> Candlex.TextGenerationModel.generate("a cat walks into a bar", 100)
