@@ -31,7 +31,7 @@ defmodule Candlex.TextGenerationModel do
 end
 
 defmodule Candlex.TextGenerationModel.Native do
-  use Rustler, otp_app: :candlex, features: ["default"]
+  use Rustler, otp_app: :candlex, features: ["cuda"]
 
   def initialize_model(model_name, model_path, cpu, temperature, top_p, seed), do: :erlang.nif_error(:nif_not_loaded)
   # When your NIF is loaded, it will override this function.

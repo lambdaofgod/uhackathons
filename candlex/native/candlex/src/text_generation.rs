@@ -17,7 +17,7 @@ use candle_transformers::generation::LogitsProcessor;
 use hf_hub::{api::sync::Api, Repo, RepoType};
 use tokenizers::Tokenizer;
 
-pub fn device(cpu: bool) -> Result<Device> {
+pub fn get_device(cpu: bool) -> Result<Device> {
     if cpu {
         Ok(Device::Cpu)
     } else {
@@ -106,7 +106,7 @@ impl TextGeneration {
             .map(|f| Ok(f.deserialize()?))
             .collect::<Result<Vec<_>>>()?;
 
-        let device = device(cpu)?;
+        let device = get_device(cpu)?;
         let vb = VarBuilder::from_safetensors(weights, DType::F32, &device);
         let config = Config::starcoder_1b();
         let model = GPTBigCode::load(vb, config)?;
