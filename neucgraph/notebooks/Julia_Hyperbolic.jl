@@ -17,17 +17,19 @@ begin
 	using LightGraphs # graph library
 	using SimpleWeightedGraphs
 	using StatisticalGraphics
+	using Plotly
 	ENV["LD_LIBRARY_PATH"] = ""
 end
 
 # ╔═╡ 461df8e8-cb6d-4927-8f31-48b591fbc194
 begin
 	using JSON
-	path = "../data/org_roam_records_2023_10_08.json"
+	path = "../data/org_roam_records_2023_10_16.json"
 end
 
-# ╔═╡ 4115223d-d5ca-43df-98f8-a30aac00ed94
-using ManifoldLearning
+# ╔═╡ d4a614e5-241b-43e9-b0ff-7aabbfee0567
+using PlutoPlotly
+
 
 # ╔═╡ 3cb49c9e-793a-4bc7-a6f6-6fddc72f0ae4
 begin
@@ -180,10 +182,31 @@ hmds = fit_hmds(dists);
 X = get_embeddings(hmds, :poincare);
 
 # ╔═╡ c68d85dd-4961-4cc9-8912-821eb1ac8b35
-ds_poincare = Dataset(x=X[:,1], y=X[:,2], name=get_sorted_vertices(labeled_graph));
+ds_poincare = DataFrame(x=X[:,1], y=X[:,2], name=get_sorted_vertices(labeled_graph));
 
-# ╔═╡ 61391d79-07f9-489d-918b-65551e8fc9f8
-sgplot(ds_poincare, StatisticalGraphics.Scatter(x=:x,y=:y,labelresponse=:name))
+# ╔═╡ ad996687-790d-46ae-9bb4-74117f34bab7
+function plot_embeddings_ds(plotter :: Type{PlutoPlot}, ds, title)
+	text_annotations = [((i - 1) % 20 == 0) ? ds[!, :name][i] : "" for i in 1:length(ds[!, :name])] 
+	
+	trace = Plotly.scatter(
+	    x=ds[!, :x], 
+	    y=ds[!, :y], 
+	    mode="markers+text",  
+	    #text=text_annotations,
+	    textposition="bottom center",
+	    hovertext=ds[!, :name],
+	    hoverinfo="text"
+	)
+	
+	layout = Layout(
+	    title=title
+	)
+	
+	plotter(Plot([trace], layout))
+end
+
+# ╔═╡ 4095f1d7-0c44-4104-b45b-c6f228e76c53
+plot_embeddings_ds(PlutoPlot, ds_poincare, "HMDS projected to Poincare disk")
 
 # ╔═╡ fa277357-69b9-4abe-a6fe-1346d7034a54
 md"""
@@ -193,9 +216,10 @@ md"""
 # ╔═╡ 351af441-c417-43bb-974b-ba7a296c2b6a
 begin
 	mds = fit(MDS, dists * 1.0; distances=true, maxoutdim=2);
-	Y_mds = predict(mds);
-	ds_mds = Dataset(x=Y_mds[1,:], y=-Y_mds[2,:], name=get_sorted_vertices(labeled_graph));
-	sgplot(ds_mds, StatisticalGraphics.Scatter(x=:x,y=:y,labelresponse=:name))
+	Y_mds = predict(mds)';
+	ds_mds = DataFrame(x=Y_mds[:,1], y=Y_mds[:,2], name=get_sorted_vertices(labeled_graph));
+
+	plot_embeddings_ds(PlutoPlot, ds_mds, "Euclidean MDS")
 end
 
 # ╔═╡ 83626734-c2b2-478b-aabd-0ef3604786b6
@@ -207,36 +231,13 @@ md"""
 begin
 	isomap = fit(Isomap, dists * 1.0);
 	Y_isomap = predict(mds);
-	ds_isomap = Dataset(x=Y_isomap[1,:], y=-Y_isomap[2,:], name=get_sorted_vertices(labeled_graph));
-	sgplot(ds_isomap, StatisticalGraphics.Scatter(x=:x,y=:y,labelresponse=:name))
+	ds_isomap = DataFrame(x=Y_isomap[1,:], y=-Y_isomap[2,:], name=get_sorted_vertices(labeled_graph));
+
+	plot_embeddings_ds(PlutoPlot, ds_isomap, "Isomap")
 end
 
 # ╔═╡ 9781e526-71b1-4e4d-a0e7-fe127104fbd9
-
-
-# ╔═╡ 5baa86c4-1972-4779-9f54-8f0cc63b892d
-
-
-# ╔═╡ 4527c79a-4657-4331-a9a0-3068021aff15
-sgplot(ds_mds, StatisticalGraphics.Scatter(x=:x,y=:y,labelresponse=:name))
-
-# ╔═╡ 0bd00c5a-00df-45f4-a2ad-5710fd85b40f
-
-
-# ╔═╡ d2a79196-c747-438d-b6bf-047074dd99e9
-
-
-# ╔═╡ 44d958ea-b0af-448a-8eef-c926ec2862a3
-
-
-# ╔═╡ c31c7488-a8e0-4dbb-a43f-167645b44c8d
-
-
-# ╔═╡ 7f082478-f761-4e1e-ab6c-66f0d643b760
-
-
-# ╔═╡ ea18299b-e2ff-47ab-a4e4-6881a05e6be4
-
+plot_embeddings_ds(PlutoPlot, ds_isomap, "Isomap")
 
 # ╔═╡ 5875994b-39da-4861-9e2c-5aaf12033a21
 md"""
@@ -262,12 +263,6 @@ end
 
 # ╔═╡ 3210cccf-4295-4382-b9c6-95e6d984c1dd
 p=[0,0,1.0]
-
-# ╔═╡ 3182dd25-262e-45f2-93c6-a201bd857833
-# ╠═╡ disabled = true
-#=╠═╡
-data = [exp(lorentz_manifold, p,  0.01 * rand(lorentz_manifold)) for i in 1:length(X)];
-  ╠═╡ =#
 
 # ╔═╡ af50c3e3-a598-4241-805f-7f2a47e9ec38
 
@@ -311,21 +306,14 @@ data
 # ╠═30281eb5-222b-4c0a-8986-17407d9d6f7c
 # ╠═2b55695f-d53c-4b78-8093-6c8fa0610073
 # ╠═c68d85dd-4961-4cc9-8912-821eb1ac8b35
-# ╠═61391d79-07f9-489d-918b-65551e8fc9f8
+# ╠═d4a614e5-241b-43e9-b0ff-7aabbfee0567
+# ╠═ad996687-790d-46ae-9bb4-74117f34bab7
+# ╠═4095f1d7-0c44-4104-b45b-c6f228e76c53
 # ╠═fa277357-69b9-4abe-a6fe-1346d7034a54
 # ╠═351af441-c417-43bb-974b-ba7a296c2b6a
 # ╠═83626734-c2b2-478b-aabd-0ef3604786b6
-# ╠═4115223d-d5ca-43df-98f8-a30aac00ed94
 # ╠═ee66593f-93ab-4f92-9316-2e9361d9fa85
 # ╠═9781e526-71b1-4e4d-a0e7-fe127104fbd9
-# ╠═5baa86c4-1972-4779-9f54-8f0cc63b892d
-# ╠═4527c79a-4657-4331-a9a0-3068021aff15
-# ╠═0bd00c5a-00df-45f4-a2ad-5710fd85b40f
-# ╠═d2a79196-c747-438d-b6bf-047074dd99e9
-# ╠═44d958ea-b0af-448a-8eef-c926ec2862a3
-# ╠═c31c7488-a8e0-4dbb-a43f-167645b44c8d
-# ╠═7f082478-f761-4e1e-ab6c-66f0d643b760
-# ╠═ea18299b-e2ff-47ab-a4e4-6881a05e6be4
 # ╠═5875994b-39da-4861-9e2c-5aaf12033a21
 # ╠═3cb49c9e-793a-4bc7-a6f6-6fddc72f0ae4
 # ╠═bea8e470-8266-42c5-b399-38735fbff300
@@ -333,7 +321,6 @@ data
 # ╠═ef77dc32-1718-419e-8be1-362b1cd55e1b
 # ╠═73d77fe2-d921-46c4-b760-60960b77f4d9
 # ╠═3210cccf-4295-4382-b9c6-95e6d984c1dd
-# ╠═3182dd25-262e-45f2-93c6-a201bd857833
 # ╠═af50c3e3-a598-4241-805f-7f2a47e9ec38
 # ╠═f27ffd49-8f1b-4993-81c3-717913e762db
 # ╠═afa6047e-1049-4aa6-8332-af642da7f400
