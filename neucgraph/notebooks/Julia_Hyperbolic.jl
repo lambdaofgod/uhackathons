@@ -18,6 +18,8 @@ begin
 	using SimpleWeightedGraphs
 	using StatisticalGraphics
 	using Plotly
+	using PlutoPlotly
+	using ManifoldLearning
 	ENV["LD_LIBRARY_PATH"] = ""
 end
 
@@ -26,10 +28,6 @@ begin
 	using JSON
 	path = "../data/org_roam_records_2023_10_16.json"
 end
-
-# ╔═╡ d4a614e5-241b-43e9-b0ff-7aabbfee0567
-using PlutoPlotly
-
 
 # ╔═╡ 3cb49c9e-793a-4bc7-a6f6-6fddc72f0ae4
 begin
@@ -145,7 +143,13 @@ labeled_graph = filter_small_connected_components(raw_labeled_graph, 10)
 md"""
 ## Now the hyperbolic stuff
 
-https://browse.arxiv.org/pdf/1804.03329.pdf
+## WARNING this works assuming dists come from Poincare model
+
+Will have to either
+- embed the points in Poincare space
+- embed into Lorentz using method from [Learning Continuous Hierarchies in the Lorentz Model of Hyperbolic Geometry](https://arxiv.org/pdf/1806.03417.pdf)
+
+[Representation Tradeoffs for Hyperbolic Embeddings](https://browse.arxiv.org/pdf/1804.03329.pdf)
 """
 
 # ╔═╡ 39b08699-372b-47cd-9011-d2e52bc8f7b8
@@ -171,7 +175,7 @@ function get_embeddings(hmds :: HMDS, space::Symbol)
 	if space == :lorentz
 		return X
 	elseif space == :poincare
-		return X[:, 2:3] ./ (1 .+ X[:,1])
+		return X[:, 2:3] ./ sqrt.(1 .+ X[:,1] .^ 2)
 	end
 end
 
@@ -217,10 +221,16 @@ md"""
 begin
 	mds = fit(MDS, dists * 1.0; distances=true, maxoutdim=2);
 	Y_mds = predict(mds)';
-	ds_mds = DataFrame(x=Y_mds[:,1], y=Y_mds[:,2], name=get_sorted_vertices(labeled_graph));
+	ds_mds = DataFrame(x=-Y_mds[:,1], y=Y_mds[:,2], name=get_sorted_vertices(labeled_graph));
 
 	plot_embeddings_ds(PlutoPlot, ds_mds, "Euclidean MDS")
 end
+
+# ╔═╡ 75623451-8691-431f-97f6-f49225ecdd4b
+ds_mds[!,:name] |> Set |> length
+
+# ╔═╡ 3ae98661-18b7-481a-911d-14a41a12287e
+
 
 # ╔═╡ 83626734-c2b2-478b-aabd-0ef3604786b6
 md"""
@@ -298,7 +308,7 @@ data
 # ╠═0bcadf0d-3e57-436a-840d-3526f7d82fe9
 # ╠═1a02921e-94b0-4dd7-8828-806910392505
 # ╠═2f3a5bee-b904-468c-a4b5-0fcb83ad1a02
-# ╟─9f716477-f681-42d8-adc1-050e19f6da4d
+# ╠═9f716477-f681-42d8-adc1-050e19f6da4d
 # ╠═39b08699-372b-47cd-9011-d2e52bc8f7b8
 # ╠═fc4d4a30-7616-4a8f-9c47-e90a17315e26
 # ╠═3f7642b4-e438-4e2b-80e8-44f7305a3a20
@@ -306,11 +316,12 @@ data
 # ╠═30281eb5-222b-4c0a-8986-17407d9d6f7c
 # ╠═2b55695f-d53c-4b78-8093-6c8fa0610073
 # ╠═c68d85dd-4961-4cc9-8912-821eb1ac8b35
-# ╠═d4a614e5-241b-43e9-b0ff-7aabbfee0567
 # ╠═ad996687-790d-46ae-9bb4-74117f34bab7
 # ╠═4095f1d7-0c44-4104-b45b-c6f228e76c53
 # ╠═fa277357-69b9-4abe-a6fe-1346d7034a54
 # ╠═351af441-c417-43bb-974b-ba7a296c2b6a
+# ╠═75623451-8691-431f-97f6-f49225ecdd4b
+# ╠═3ae98661-18b7-481a-911d-14a41a12287e
 # ╠═83626734-c2b2-478b-aabd-0ef3604786b6
 # ╠═ee66593f-93ab-4f92-9316-2e9361d9fa85
 # ╠═9781e526-71b1-4e4d-a0e7-fe127104fbd9
