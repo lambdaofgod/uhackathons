@@ -2,7 +2,8 @@
 
 ```elixir
 Mix.install([
-  {:explorer, "~> 0.7.0"}
+  {:explorer, "~> 0.7.0"},
+  {:poison, "~> 5.0"}
 ])
 
 org_path = "~/Projects/org"
@@ -182,6 +183,20 @@ roam_link_graph_records =
 filtered_roam_link_graph_records =
   roam_link_graph_records
   |> Enum.filter(fn rec -> rec |> Map.keys() |> Enum.count() == 8 end)
+```
+
+```elixir
+
+```
+
+```elixir
+__DIR__
+|> Path.dirname()
+|> Path.join("data/org_roam_records_2023_10_16.json")
+|> File.write!(
+  filtered_roam_link_graph_records
+  |> Poison.encode!()
+)
 ```
 
 ```elixir
