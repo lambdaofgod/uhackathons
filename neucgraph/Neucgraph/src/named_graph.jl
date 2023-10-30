@@ -56,6 +56,4 @@ function neg_adjlist(ng::NamedGraph)
     ]
 end
 
-
-
 end

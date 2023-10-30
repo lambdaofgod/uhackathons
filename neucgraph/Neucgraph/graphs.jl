@@ -5,7 +5,8 @@ using LightGraphs
 
 ## MODULE
 
-using Neucgraph
+import Neucgraph.OrgGraph
+import Neucgraph.NamedGraphs
 
 org_links = OrgGraph.load_links("../data/org_roam_records_2023_10_16.json")
 
