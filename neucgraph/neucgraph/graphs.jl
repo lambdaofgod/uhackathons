@@ -3,14 +3,46 @@ using Manopt
 using Manifolds
 using LightGraphs
 
-g = SimpleGraph(4)
-add_edge!(g, 1, 2)
-add_edge!(g, 1, 3)
-add_edge!(g, 2, 4)
-add_edge!(g, 3, 4)
-add_edge!(g, 2, 3)
 
-neighbors.(Ref(g), [1,2])
+module GraphUtils
+
+using Distributions
+using Manopt
+using Manifolds
+using LightGraphs
+
+struct NodeInfo
+    name::String
+end
+
+struct NamedGraph
+    graph::SimpleGraph
+    names::Dict{String,Int64}
+end
+
+
+function make_named_graph(edges)
+    vertices = [v for e in edges for v in collect(e)] |> Set |> collect
+    vertices_dict = Dict([v => i for (i, v) in enumerate(vertices)])
+    g = SimpleGraph(vertices |> length)
+    for (v, w) in edges
+        add_edge!(g, vertices_dict[v], vertices_dict[w])
+    end
+    NamedGraph(g, vertices_dict)
+end
+
+
+function neighbors(ng::NamedGraph, vertex_name::String)
+    LightGraphs.neighbors(ng.graph, ng.names[vertex_name])
+end
+
+end
+
+edges = [("a", "b"), ("c", "d"), ("b", "c")]
+
+named_graph = GraphUtils.make_named_graph(edges)
+
+GraphUtils.neighbors.(Ref(named_graph), ["a", "b"])
 
 
 indices = 1:size(graph_dists)[1] |> collect
