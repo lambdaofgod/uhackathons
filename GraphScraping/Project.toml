@@ -1,0 +1,7 @@
+name = "GraphScraping"
+uuid = "36b920f7-fda6-4804-b0f2-f6a8d57732fa"
+authors = ["Jakub 'lambdaofgod' Bartczuk <bartczukkuba@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+LightGraphs = "093fc24a-ae57-5d10-9952-331d41423f4d"
