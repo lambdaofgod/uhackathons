@@ -1,8 +1,5 @@
-using Base: AbstractCartesianIndex
 using Pkg
 Pkg.activate(".")
-Pkg.add("Zygote")
-Pkg.build()
 using Zygote
 using Manifolds
 using LinearAlgebra
@@ -49,17 +46,31 @@ end
 
 HyperbolicWithMetric = ManifoldWithMetricMatrix(M, hyperbolic_metric)
 
-function riemannian_gradient2(M::ManifoldWithMetricMatrix, f, x, y)
+
+function riemannian_bigradient(M::ManifoldWithMetricMatrix, f, x, y)
     (euc_grad_x, euc_grad_y) = Zygote.gradient(f, x, y)
-    h = hyperbolic_metric * [euc_grad_x euc_grad_y]'
-    #project(M.manifold, y, hyperbolic_metric .* euc_grads)
-    h
+    euc_grad = [euc_grad_x euc_grad_y]
+    println(typeof(euc_grad))
+    println(size(euc_grad))
+    println(typeof(hyperbolic_metric))
+    println(size(hyperbolic_metric))
+    hs = (hyperbolic_metric * euc_grad)'
+    println("hs'")
+    println(hs |> size)
+    println("xy")
+    println([x, y] |> size)
+    project.(Ref(M.manifold), [x, y], eachrow(hs))
 end
 
-zygote_gradient_result = riemannian_gradient2(HyperbolicWithMetric, hyperbolic_dist, X[1, :], Y[1, :])
+
+zygote_gradient_result = riemannian_bigradient(HyperbolicWithMetric, hyperbolic_dist, X[1, :], Y[1, :])
+
 
 @assert isapprox(zygote_gradient_result, manifolds_gradient_result)
 
 riemannian_gradient2.(Ref(HyperbolicWithMetric), Ref(hyperbolic_dist), eachrow(X), eachrow(Y))
 
 Zygote.gradient(hyperbolic_dist, X[1, :], Y[1, :])
+
+
+#
