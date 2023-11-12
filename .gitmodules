@@ -1,0 +1,3 @@
+[submodule "category_thourism/nlab-content"]
+	path = category_thourism/nlab-content
+	url = https://github.com/ncatlab/nlab-content.git
