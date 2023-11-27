@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "llm-search"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.12"
+llama-index = "^0.9.8"
+llama-hub = "^0.0.48"
+ipykernel = "^6.26.0"
+matplotlib = "^3.8.2"
+fastapi = "^0.104.1"
+uvicorn = "^0.24.0.post1"
+nbconvert = "^7.11.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
