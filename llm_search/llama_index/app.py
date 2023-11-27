@@ -2,7 +2,7 @@ from llama_index import SimpleDirectoryReader
 from llama_index.llama_pack import download_llama_pack
 from contextlib import contextmanager
 import uvicorn
-from pydantic import BaseModel, Field
+from pydantic_models import RetrievalRequest, RetrievalResult
 from llama_index.response.schema import Response
 from llama_index.schema import TextNode
 from fastapi import FastAPI, Request
@@ -35,7 +35,7 @@ class ExceptionResponse(Exception):
 async def app_exception_handler(request: Request, exc: ExceptionResponse):
     return JSONResponse(
         status_code=418,
-        content={"message": f"App error: {exc.name}\n Reason: {exc.reason}"},
+        content={"message": f"App error: {exc.reason}"},
     )
 
 
@@ -44,18 +44,7 @@ def exception_handler(name: str):
     try:
         yield
     except Exception as e:
-        raise ExceptionResponse(name, e)
-
-
-class QARequest(BaseModel):
-    question: str
-    similarity_top_k: int = Field(default=2, ge=1)
-
-
-class SearchResult(BaseModel):
-    id: str
-
-    score: float
+        raise ExceptionResponse(e)
 
 
 # @app.post("/answer", response_model=Response)
@@ -63,28 +52,20 @@ class SearchResult(BaseModel):
 #     return app.state.search_system.run(**dict(request))
 
 
-class RetrievalResult(BaseModel):
-    text: str
-    metadata: dict
-    score: float
-
-    @classmethod
-    def from_llamaindex_node(cls, r):
-        return RetrievalResult(text=r.node.text, score=r.score, metadata=r.node.metadata)
-
-
 @app.post("/retrieve", response_model=List[RetrievalResult])
-def retrieve(text: str):
+def retrieve(request: RetrievalRequest):
     with exception_handler("retrieve"):
+        retriever = app.state.index.as_retriever(similarity_top_k=request.similarity_top_k)
+        raw_results = retriever.retrieve(request.text)
         result = [RetrievalResult.from_llamaindex_node(
-            r) for r in app.state.retriever.retrieve(text)]
+            r) for r in raw_results]
     return result
 
 
 def main(host, port, documents_dir):
     search_system = setup_search_system(documents_dir)
     app.state.search_system = search_system
-    app.state.retriever = search_system.index.as_retriever()
+    app.state.index = search_system.index
     uvicorn.run(app, host=host, port=port)
 
 
