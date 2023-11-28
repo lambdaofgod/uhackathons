@@ -1,14 +1,10 @@
 from pydantic import BaseModel, Field
-
-
-class QARequest(BaseModel):
-    question: str
-    similarity_top_k: int = Field(default=2, ge=1)
+from typing import List
 
 
 class RetrievalRequest(BaseModel):
     text: str
-    similarity_top_k: int = Field(default=2, ge=1)
+    top_k: int = Field(default=3, ge=1)
 
 
 class RetrievalResult(BaseModel):
@@ -25,5 +21,17 @@ class RetrievalResult(BaseModel):
             score=r.score,
             metadata=r.node.metadata,
             start_char_idx=r.node.start_char_idx,
-            end_char_idx=r.node.end_char_idx
+            end_char_idx=r.node.end_char_idx,
         )
+
+
+class RAGRequest(BaseModel):
+    query_str: str
+    similarity_top_k: int = Field(default=3, ge=1)
+    return_retrieval_results: bool = Field(default=False)
+
+
+class RAGResult(BaseModel):
+    response: str
+    metadata: dict
+    retrieval_results: List[RetrievalResult]
