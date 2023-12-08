@@ -8,6 +8,7 @@ import subprocess
 import re
 import shutil
 import time
+import logging
 
 
 class OpenAIVLLMClient(LM):
@@ -19,6 +20,7 @@ class OpenAIVLLMClient(LM):
 
     def _generate(self, prompt, **kwargs):
         kwargs = {**self.kwargs, **kwargs}
+        logging.info(f"generation kwargs: {kwargs}")
 
         payload = {
             "model": kwargs["model"],
@@ -81,6 +83,7 @@ class VLLMClient(LM):
 
     def _generate(self, prompt, **kwargs):
         kwargs = {**self.kwargs, **kwargs}
+        logging.info(f"generation kwargs: {kwargs}")
 
         payload = {
             "prompt": prompt,

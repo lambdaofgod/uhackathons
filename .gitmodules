@@ -2,5 +2,5 @@
 	path = category_thourism/nlab-content
 	url = https://github.com/ncatlab/nlab-content.git
 [submodule "llm_search/verba/Verba"]
-	path = llm_search/verba/Verba
+	path = llms/verba/Verba
 	url = https://github.com/weaviate/Verba

@@ -1,16 +1,15 @@
 [tool.poetry]
-name = "llm-search-dspy"
+name = "llms-dspy"
 version = "0.1.0"
 description = ""
 authors = ["Jakub 'lambdaofgod' Bartczuk <bartczukkuba@gmail.com>"]
-readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.12"
 ipykernel = "^6.27.1"
 qdrant-client = {extras = ["fastembed"], version = "^1.7.0"}
 langchain = "^0.0.348"
-unstructured = "^0.11.2"
+unstructured = {extras = ["org"], version = "^0.11.2"}
 tqdm = "^4.66.1"
 dspy-ai = {path = "/home/kuba/Projects/forks/dspy"}
 fire = "^0.5.0"
