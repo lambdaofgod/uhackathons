@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 import dspy
 import dspy.retrieve
@@ -24,10 +24,11 @@ def get_qdrant_retriever(collection_name):
         qdrant_collection_name=collection_name, qdrant_client=client, k=3)
 
 
-def get_llm(llm_type: Literal["vllm", "openai", "openai_vllm"], openai_key_path="~/.keys/openai_key.txt"):
+def get_llm(llm_type: Literal["vllm", "openai", "openai_vllm"], openai_key_path: Optional[str] = None):
 
     vllm_model = 'alpindale/mistral-7b-safetensors'
     if llm_type == "openai":
+        assert openai_key_path is not None
         return dspy.OpenAI(api_key=load_api_key(openai_key_path))
     elif llm_type == "openai_vllm":
         return OpenAIVLLMClient(model=vllm_model, port=8000, url="http://localhost")
