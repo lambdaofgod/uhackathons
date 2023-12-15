@@ -17,16 +17,17 @@ def load_api_key(key_path):
     return key
 
 
-def get_qdrant_retriever(collection_name):
+def get_qdrant_retriever(collection_name, host=None, port=None):
     qdrant_path = Path(f"~/.cache/qdrant/{collection_name}").expanduser()
-    client = QdrantClient(path=qdrant_path)
+    if host is None or port is None:
+        client = QdrantClient(path=qdrant_path)
+    else:
+        client = QdrantClient(host=host, port=port)
     return QdrantRM(
         qdrant_collection_name=collection_name, qdrant_client=client, k=3)
 
 
-def get_llm(llm_type: Literal["vllm", "openai", "openai_vllm"], openai_key_path: Optional[str] = None):
-
-    vllm_model = 'alpindale/mistral-7b-safetensors'
+def get_llm(llm_type: Literal["vllm", "openai", "openai_vllm"], openai_key_path: Optional[str] = None, vllm_model: Optional[str] = None):
     if llm_type == "openai":
         assert openai_key_path is not None
         return dspy.OpenAI(api_key=load_api_key(openai_key_path))

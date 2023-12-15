@@ -1,0 +1,20 @@
+version: '3.4'
+services:
+  qdrant:
+    image: qdrant/qdrant
+    ports:
+      - 6333:6333
+      - 6334:6334
+    volumes:
+      - $HOME/.cache/qdrant:/qdrant/storage
+  semantic_search_api:
+    build:
+      dockerfile:
+        app/Dockerfile
+    ports:
+      - 9999:9999
+    depends_on:
+      - qdrant
+    environment:
+      - DEFAULT_COLLECTION_NAME=org
+    entrypoint: python app.py run --host 0.0.0.0 --port 9999
