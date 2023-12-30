@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "arxivist"
+version = "0.1.0"
+description = ""
+authors = ["Jakub 'lambdaofgod' Bartczuk <bartczukkuba@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<4.0"
+beautifulsoup4 = "^4.12.2"
+ipykernel = "^6.28.0"
+eland = "^8.11.1"
+requests = "^2.31.0"
+pydantic = "^2.5.3"
+returns = "^0.22.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
