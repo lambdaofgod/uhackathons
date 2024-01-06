@@ -1,19 +1,8 @@
-// # Basic Example
-//
-// This example covers the basic functionalities of
-// tantivy.
-//
-// We will :
-// - define our schema
-// - create an index in a directory
-// - index a few documents into our index
-// - search for the best document matching a basic query
-// - retrieve the best document's original content.
-
-// ---
-// Importing tantivy...
 use clap::Parser;
+use polars::prelude::SerReader;
+use polars::prelude::{CsvReader, PolarsResult};
 use std::default::Default;
+use std::fs::File;
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
 use tantivy::schema::*;
@@ -255,8 +244,22 @@ fn tantivy_index_example() -> Result<(), String> {
     tantivy_result_to_std(tantivy_index_example_impl())
 }
 
-fn polars_example() -> Result<(), String> {
+fn polars_example_impl(csv_path: &str) -> PolarsResult<()> {
+    let reader = CsvReader::from_path(csv_path).unwrap();
+
+    let df = reader.has_header(true).finish()?;
+
+    for col in df.get_columns() {
+        println!("Column: {:?}", col);
+    }
     Ok(())
+}
+
+fn polars_example(csv_path: &str) -> Result<(), String> {
+    match polars_example_impl(csv_path) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("{}", e)),
+    }
 }
 
 #[derive(clap::ValueEnum, Debug, Clone)]
@@ -269,6 +272,8 @@ enum ExampleType {
 struct Args {
     #[clap(value_enum, default_value = "polars")]
     example_type: ExampleType,
+    #[clap(default_value = "None")]
+    csv_path: Option<String>,
 }
 
 fn main() -> Result<(), String> {
@@ -276,6 +281,6 @@ fn main() -> Result<(), String> {
 
     match args.example_type {
         ExampleType::Tantivy => tantivy_index_example(),
-        ExampleType::Polars => polars_example(),
+        ExampleType::Polars => polars_example(&args.csv_path.unwrap()),
     }
 }
