@@ -12,13 +12,15 @@
 
 // ---
 // Importing tantivy...
+use clap::Parser;
+use std::default::Default;
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
 use tantivy::schema::*;
 use tantivy::{doc, Index, IndexWriter, ReloadPolicy};
 use tempfile::TempDir;
 
-fn main() -> Result<()> {
+fn tantivy_index_example_impl() -> tantivy::Result<()> {
     // Let's create a temporary directory for the
     // sake of this example
     let index_path = TempDir::new()?;
@@ -240,4 +242,40 @@ fn main() -> Result<()> {
     println!("{}", explanation.to_pretty_json());
 
     Ok(())
+}
+
+fn tantivy_result_to_std<T>(res: tantivy::Result<T>) -> Result<T, String> {
+    match res {
+        Ok(v) => Ok(v),
+        Err(e) => Err(format!("{}", e)),
+    }
+}
+
+fn tantivy_index_example() -> Result<(), String> {
+    tantivy_result_to_std(tantivy_index_example_impl())
+}
+
+fn polars_example() -> Result<(), String> {
+    Ok(())
+}
+
+#[derive(clap::ValueEnum, Debug, Clone)]
+enum ExampleType {
+    Tantivy,
+    Polars,
+}
+
+#[derive(Parser, Debug)]
+struct Args {
+    #[clap(value_enum, default_value = "polars")]
+    example_type: ExampleType,
+}
+
+fn main() -> Result<(), String> {
+    let args = Args::parse();
+
+    match args.example_type {
+        ExampleType::Tantivy => tantivy_index_example(),
+        ExampleType::Polars => polars_example(),
+    }
 }
