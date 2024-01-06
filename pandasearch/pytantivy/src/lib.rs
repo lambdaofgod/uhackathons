@@ -1,15 +1,14 @@
 use lazy_static::lazy_static;
 use pyo3::prelude::*;
+mod index_registry;
 mod wrappers;
+use index_registry::IndexRegistry;
 use pyo3::types::{PyDict, PyList, PyString};
-use std::collections::HashMap;
-use std::sync::Mutex;
 use tantivy::Result as TantivyResult;
-use wrappers::IndexWrapper;
+use wrappers::TantivityIndexWrapper;
 
 lazy_static! {
-    static ref INDEXWRAPPERS: Mutex<HashMap<String, Box<IndexWrapper>>> =
-        Mutex::new(HashMap::new());
+    static ref INDEX_REGISTRY: IndexRegistry = IndexRegistry::new();
 }
 
 // TODO: make a pyclass so that the functions do not have to pass index name
@@ -22,32 +21,18 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 #[pyfunction]
 fn initialize_index(name: &PyString, name_field: &PyString, fields: &PyList) -> PyResult<()> {
     let fields_list = fields.extract::<Vec<String>>()?;
-    let index_wrapper = IndexWrapper::new(
-        name.to_string(),
-        name_field.to_string(),
-        fields.iter().map(|x| x.to_string()).collect(),
-    );
-    INDEXWRAPPERS
-        .lock()
-        .unwrap()
-        .insert(name.to_string(), Box::new(index_wrapper));
+    INDEX_REGISTRY.initialize_index(name.to_string(), name_field.to_string(), fields_list)?;
     Ok(())
 }
 
 #[pyfunction]
 fn index_document(name: &PyString, title: &PyString, text: &PyString) -> PyResult<()> {
-    let mut binding = INDEXWRAPPERS.lock().unwrap();
-    let index_wrapper = binding.get_mut(&name.to_string()).unwrap();
-
-    index_wrapper.add_document(&title.to_string(), &text.to_string())
+    INDEX_REGISTRY.index_document(name.to_string(), title.to_string(), text.to_string())
 }
 
 #[pyfunction]
 fn search<'a>(py: Python<'a>, name: &'a PyString, query: &'a PyString) -> PyResult<&'a PyList> {
-    let mut binding = INDEXWRAPPERS.lock().unwrap();
-    let index_wrapper = binding.get_mut(&name.to_string()).unwrap();
-
-    let vec_results = index_wrapper.search(&query.to_string())?;
+    let vec_results = INDEX_REGISTRY.search(name.to_string(), query.to_string())?;
     Ok(PyList::new(py, vec_results))
 }
 

@@ -4,7 +4,7 @@ use tantivy::query::QueryParser;
 use tantivy::schema::*;
 use tantivy::{doc, Index, IndexWriter, ReloadPolicy};
 
-pub struct IndexWrapper {
+pub struct TantivityIndexWrapper {
     index: Index,
     schema: Schema,
 }
@@ -18,7 +18,7 @@ fn from_tantivy_result<T>(tantivy_res: tantivy::Result<T>) -> Result<T, PyErr> {
     }
 }
 
-impl IndexWrapper {
+impl TantivityIndexWrapper {
     pub fn new(index_name: String, name_field: String, fields: Vec<String>) -> Self {
         let mut schema_builder = Schema::builder();
         schema_builder.add_text_field(&name_field.to_string(), TEXT | STORED);
@@ -27,7 +27,7 @@ impl IndexWrapper {
         }
         let schema = schema_builder.build();
         let index = Index::create_in_ram(schema.clone());
-        IndexWrapper { index, schema }
+        TantivityIndexWrapper { index, schema }
     }
 
     // TODO: accept a hashmap
