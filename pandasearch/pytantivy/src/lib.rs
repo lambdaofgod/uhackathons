@@ -1,18 +1,20 @@
+mod index_registry;
+pub mod polars_documents;
+pub mod wrappers;
+
+use index_registry::IndexRegistry;
 use lazy_static::lazy_static;
 use pyo3::prelude::*;
-mod index_registry;
-mod wrappers;
-use index_registry::IndexRegistry;
 use pyo3::types::{PyDict, PyList, PyString};
+use std::collections::HashMap;
 use tantivy::Result as TantivyResult;
-use wrappers::TantivityIndexWrapper;
+use wrappers::TantivyIndexWrapper;
 
 lazy_static! {
     static ref INDEX_REGISTRY: IndexRegistry = IndexRegistry::new();
 }
 
 // TODO: make a pyclass so that the functions do not have to pass index name
-
 #[pyfunction]
 fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
     Ok((a + b).to_string())
@@ -26,8 +28,10 @@ fn initialize_index(name: &PyString, name_field: &PyString, fields: &PyList) -> 
 }
 
 #[pyfunction]
-fn index_document(name: &PyString, title: &PyString, text: &PyString) -> PyResult<()> {
-    INDEX_REGISTRY.index_document(name.to_string(), title.to_string(), text.to_string())
+fn index_document<'a>(name: &'a PyString, document_dict: &'a PyDict) -> PyResult<()> {
+    let document_map = document_dict.extract::<HashMap<String, String>>()?;
+
+    INDEX_REGISTRY.index_document(name.to_string(), document_map)
 }
 
 #[pyfunction]

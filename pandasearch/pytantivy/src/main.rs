@@ -1,6 +1,9 @@
+mod polars_documents;
+mod wrappers;
 use clap::Parser;
-use polars::prelude::SerReader;
 use polars::prelude::{CsvReader, PolarsResult};
+use polars::prelude::{PolarsError, SerReader};
+use polars_documents::df_rows_foreach;
 use std::default::Default;
 use std::fs::File;
 use tantivy::collector::TopDocs;
@@ -249,10 +252,10 @@ fn polars_example_impl(csv_path: &str) -> PolarsResult<()> {
 
     let df = reader.has_header(true).finish()?;
 
-    for col in df.get_columns() {
-        println!("Column: {:?}", col);
-    }
-    Ok(())
+    df_rows_foreach::<PolarsError>(&df, &|row| {
+        println!("{:?}", row);
+        Ok(())
+    })
 }
 
 fn polars_example(csv_path: &str) -> Result<(), String> {
