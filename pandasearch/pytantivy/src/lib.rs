@@ -40,6 +40,12 @@ fn search<'a>(py: Python<'a>, name: &'a PyString, query: &'a PyString) -> PyResu
     Ok(PyList::new(py, vec_results))
 }
 
+#[pyfunction]
+fn get_index_names<'a>(py: Python<'a>) -> PyResult<&'a PyList> {
+    let index_names = INDEX_REGISTRY.get_index_names()?;
+    Ok(PyList::new(py, index_names))
+}
+
 #[pymodule]
 #[pyo3(name = "pytantivy")]
 fn pytantivy(_py: Python<'_>, m: &PyModule) -> PyResult<()> {

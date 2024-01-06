@@ -3,7 +3,7 @@ mod wrappers;
 use clap::Parser;
 use polars::prelude::{CsvReader, PolarsResult};
 use polars::prelude::{PolarsError, SerReader};
-use polars_documents::df_rows_foreach;
+use polars_documents::{df_rows_foreach, IndexableCollection};
 use std::default::Default;
 use std::fs::File;
 use tantivy::collector::TopDocs;
@@ -11,6 +11,7 @@ use tantivy::query::QueryParser;
 use tantivy::schema::*;
 use tantivy::{doc, Index, IndexWriter, ReloadPolicy};
 use tempfile::TempDir;
+use wrappers::TantivyIndexWrapper;
 
 fn tantivy_index_example_impl() -> tantivy::Result<()> {
     // Let's create a temporary directory for the
@@ -247,7 +248,7 @@ fn tantivy_index_example() -> Result<(), String> {
     tantivy_result_to_std(tantivy_index_example_impl())
 }
 
-fn polars_example_impl(csv_path: &str) -> PolarsResult<()> {
+fn polars_example(csv_path: &str) -> PolarsResult<()> {
     let reader = CsvReader::from_path(csv_path).unwrap();
 
     let df = reader.has_header(true).finish()?;
@@ -258,10 +259,33 @@ fn polars_example_impl(csv_path: &str) -> PolarsResult<()> {
     })
 }
 
-fn polars_example(csv_path: &str) -> Result<(), String> {
-    match polars_example_impl(csv_path) {
-        Ok(_) => Ok(()),
+fn polars_result_to_result<T>(res: PolarsResult<T>) -> Result<T, String> {
+    match res {
+        Ok(x) => Ok(x),
         Err(e) => Err(format!("{}", e)),
+    }
+}
+
+fn polars_search_example(csv_path: String, query: String) -> Result<(), String> {
+    let reader = CsvReader::from_path(&csv_path).unwrap();
+
+    let df_res = reader.has_header(true).finish();
+    let df = polars_result_to_result(df_res)?;
+
+    let index = TantivyIndexWrapper::new(
+        "test_index".to_string(),
+        "title".to_string(),
+        vec!["text".to_string()],
+    );
+
+    let indexing_result = df.index_collection(&index);
+
+    match index.search(&query) {
+        Ok(search_result) => {
+            println!("Search result: {:?}", search_result);
+            Ok(())
+        }
+        Err(e) => Err(format!("Error: {}", e)),
     }
 }
 
@@ -269,6 +293,7 @@ fn polars_example(csv_path: &str) -> Result<(), String> {
 enum ExampleType {
     Tantivy,
     Polars,
+    PolarsSearchExample,
 }
 
 #[derive(Parser, Debug)]
@@ -277,6 +302,8 @@ struct Args {
     example_type: ExampleType,
     #[clap(default_value = "None")]
     csv_path: Option<String>,
+    #[clap(default_value = "text")]
+    query: String,
 }
 
 fn main() -> Result<(), String> {
@@ -284,6 +311,9 @@ fn main() -> Result<(), String> {
 
     match args.example_type {
         ExampleType::Tantivy => tantivy_index_example(),
-        ExampleType::Polars => polars_example(&args.csv_path.unwrap()),
+        ExampleType::Polars => polars_result_to_result(polars_example(&args.csv_path.unwrap())),
+        ExampleType::PolarsSearchExample => {
+            polars_search_example(args.csv_path.unwrap(), args.query)
+        }
     }
 }

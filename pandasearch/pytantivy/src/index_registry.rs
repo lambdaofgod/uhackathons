@@ -23,6 +23,16 @@ impl IndexRegistry {
         }
     }
 
+    pub fn get_index_names(&self) -> Result<Vec<String>, PyErr> {
+        let binding = self.indices.read();
+        match binding {
+            Ok(binding) => Ok(binding.keys().cloned().collect()),
+            Err(err) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                err.to_string(),
+            )),
+        }
+    }
+
     pub fn initialize_index(
         &self,
         name: String,

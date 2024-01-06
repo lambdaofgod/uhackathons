@@ -8,6 +8,7 @@ use tantivy::{doc, Index, IndexWriter, ReloadPolicy};
 pub struct TantivyIndexWrapper {
     index: Index,
     schema: Schema,
+    title_field_name: String,
 }
 
 impl TantivyIndexWrapper {
@@ -19,7 +20,11 @@ impl TantivyIndexWrapper {
         }
         let schema = schema_builder.build();
         let index = Index::create_in_ram(schema.clone());
-        TantivyIndexWrapper { index, schema }
+        TantivyIndexWrapper {
+            index,
+            schema,
+            title_field_name: name_field,
+        }
     }
 
     pub fn num_docs(&self) -> tantivy::Result<u64> {
@@ -30,8 +35,6 @@ impl TantivyIndexWrapper {
     // TODO: accept a hashmap
     pub fn add_document(&self, document_map: HashMap<String, String>) -> tantivy::Result<()> {
         let mut index_writer = self.index.writer(50_000_000)?;
-        let title_field = self.schema.get_field("title").unwrap();
-        let body_field = self.schema.get_field("body").unwrap();
 
         let doc = Document::from(self.field_vec_from_hashmap(document_map));
 
@@ -43,9 +46,13 @@ impl TantivyIndexWrapper {
     pub fn search(&self, query: &str) -> tantivy::Result<Vec<String>> {
         let reader = self.index.reader()?;
         let searcher = reader.searcher();
-        let title_field = self.schema.get_field("title").unwrap();
-        let body_field = self.schema.get_field("body").unwrap();
-        let query_parser = QueryParser::for_index(&self.index, vec![title_field, body_field]);
+        let title_field = self.schema.get_field(&self.title_field_name).unwrap();
+        let fields = self
+            .schema
+            .fields()
+            .map(|(field, _)| field)
+            .collect::<Vec<_>>();
+        let query_parser = QueryParser::for_index(&self.index, fields);
         let query = query_parser.parse_query(query)?;
         let top_docs = searcher.search(&query, &TopDocs::with_limit(10))?;
         let mut results = Vec::new();

@@ -3,7 +3,7 @@ use polars::prelude::*;
 
 use polars::datatypes::DataType;
 use std::collections::HashMap;
-trait IndexableCollection {
+pub trait IndexableCollection {
     fn index_collection(&self, index: &TantivyIndexWrapper) -> tantivy::Result<()>;
 }
 
