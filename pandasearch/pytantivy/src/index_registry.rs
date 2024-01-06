@@ -1,4 +1,6 @@
+use crate::polars_documents::IndexableCollection;
 use crate::wrappers::TantivyIndexWrapper;
+use polars::prelude::DataFrame;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::sync::RwLock;
@@ -63,5 +65,12 @@ impl IndexRegistry {
         let index_wrapper = binding.get(&name.to_string()).unwrap();
 
         from_tantivy_result(index_wrapper.search(&query.to_string()))
+    }
+
+    pub fn index_df(&self, name: String, df: &DataFrame) -> Result<(), PyErr> {
+        let binding = self.indices.read().unwrap();
+        let index_wrapper = binding.get(&name.to_string()).unwrap();
+
+        from_tantivy_result(df.index_collection(index_wrapper))
     }
 }

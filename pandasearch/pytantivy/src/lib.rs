@@ -4,20 +4,16 @@ pub mod wrappers;
 
 use index_registry::IndexRegistry;
 use lazy_static::lazy_static;
+use polars::prelude::DataFrame;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyString};
+use pyo3_polars::PyDataFrame;
 use std::collections::HashMap;
 use tantivy::Result as TantivyResult;
 use wrappers::TantivyIndexWrapper;
 
 lazy_static! {
     static ref INDEX_REGISTRY: IndexRegistry = IndexRegistry::new();
-}
-
-// TODO: make a pyclass so that the functions do not have to pass index name
-#[pyfunction]
-fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
-    Ok((a + b).to_string())
 }
 
 #[pyfunction]
@@ -46,13 +42,20 @@ fn get_index_names<'a>(py: Python<'a>) -> PyResult<&'a PyList> {
     Ok(PyList::new(py, index_names))
 }
 
+#[pyfunction]
+fn index_polars_dataframe(name: &PyString, pydf: PyDataFrame) -> PyResult<()> {
+    let df: DataFrame = pydf.into();
+    Ok(INDEX_REGISTRY.index_df(name.to_string(), &df)?)
+}
+
 #[pymodule]
 #[pyo3(name = "pytantivy")]
 fn pytantivy(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
     m.add_function(wrap_pyfunction!(initialize_index, m)?)?;
     m.add_function(wrap_pyfunction!(index_document, m)?)?;
     m.add_function(wrap_pyfunction!(search, m)?)?;
+    m.add_function(wrap_pyfunction!(get_index_names, m)?)?;
+    m.add_function(wrap_pyfunction!(index_polars_dataframe, m)?)?;
 
     Ok(())
 }
