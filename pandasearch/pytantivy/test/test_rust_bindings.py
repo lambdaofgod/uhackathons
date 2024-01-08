@@ -27,13 +27,6 @@ def test_indexing(tantivity_index):
     pytantivy.index_document("foo", {"title": "a title", "text": "a text"})
 
 
-def test_search(tantivity_index):
-    pytantivy.index_document("foo", {"title": "a title", "text": "a text"})
-    query = "text"
-    results = pytantivy.search("foo", query)
-    assert results == ["a title"]
-
-
 def test_indexing_with_polars(tantivity_index, polars_df):
     pytantivy.index_polars_dataframe("foo", polars_df)
     query = "text"

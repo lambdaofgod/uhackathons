@@ -1,9 +1,8 @@
-use pyo3::prelude::*;
 use std::collections::HashMap;
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
 use tantivy::schema::*;
-use tantivy::{doc, Index, IndexWriter, ReloadPolicy};
+use tantivy::{Index, IndexWriter};
 
 pub struct TantivyIndexWrapper {
     index: Index,
@@ -27,19 +26,34 @@ impl TantivyIndexWrapper {
         }
     }
 
+    pub fn field_names(&self) -> Vec<&str> {
+        let fields = self.schema.fields();
+
+        fields
+            .map(|(field, _)| self.schema.get_field_name(field))
+            .collect::<Vec<_>>()
+    }
+
     pub fn num_docs(&self) -> tantivy::Result<u64> {
         let reader = self.index.reader()?;
         Ok(reader.searcher().num_docs())
     }
 
     // TODO: accept a hashmap
-    pub fn add_document(&self, document_map: HashMap<String, String>) -> tantivy::Result<()> {
+    pub fn add_document(&self, document_map: HashMap<&str, String>) -> tantivy::Result<()> {
         let mut index_writer = self.index.writer(50_000_000)?;
-
-        let doc = Document::from(self.field_vec_from_hashmap(document_map));
-
-        index_writer.add_document(doc);
+        self.add_document_nocommit(&index_writer, document_map)?;
         index_writer.commit()?;
+        Ok(())
+    }
+
+    pub fn add_document_nocommit(
+        &self,
+        index_writer: &IndexWriter,
+        document_map: HashMap<&str, String>,
+    ) -> tantivy::Result<()> {
+        let doc = Document::from(self.field_vec_from_hashmap(document_map));
+        index_writer.add_document(doc);
         Ok(())
     }
 
@@ -68,20 +82,44 @@ impl TantivyIndexWrapper {
         Ok(results)
     }
 
-    fn field_vec_from_hashmap(&self, doc: HashMap<String, String>) -> Vec<FieldValue> {
+    fn field_vec_from_hashmap(&self, doc: HashMap<&str, String>) -> Vec<FieldValue> {
         let mut field_vec = Vec::new();
         for (key, value) in doc {
-            let field_res = self.schema.get_field(&key);
+            let field_res = self.schema.get_field(key);
             match field_res {
                 Ok(field) => {
                     field_vec.push(FieldValue::new(field, Value::Str(value)));
                 }
-                Err(_) => {
-                    println!("Field {} not found in schema", key);
-                }
+                Err(_) => {}
             }
         }
         field_vec
+    }
+}
+
+pub struct BatchIndexer<'a> {
+    index_writer: IndexWriter,
+    index: &'a TantivyIndexWrapper,
+}
+
+impl<'a> BatchIndexer<'a> {
+    pub fn new(index: &'a TantivyIndexWrapper) -> Self {
+        let index_writer = index.index.writer(2_000_000_000).unwrap();
+        BatchIndexer {
+            index_writer: index_writer,
+            index: index,
+        }
+    }
+
+    pub fn add_document(&self, document_map: HashMap<&str, String>) -> tantivy::Result<()> {
+        self.index
+            .add_document_nocommit(&self.index_writer, document_map)?;
+        Ok(())
+    }
+
+    pub fn commit(&mut self) -> tantivy::Result<()> {
+        self.index_writer.commit()?;
+        Ok(())
     }
 }
 

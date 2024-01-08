@@ -274,8 +274,8 @@ fn polars_search_example(csv_path: String, query: String) -> Result<(), String> 
 
     let index = TantivyIndexWrapper::new(
         "test_index".to_string(),
-        "title".to_string(),
-        vec!["text".to_string()],
+        "repo".to_string(),
+        vec!["dependencies".to_string()],
     );
 
     let indexing_result = df.index_collection(&index);
@@ -298,9 +298,9 @@ enum ExampleType {
 
 #[derive(Parser, Debug)]
 struct Args {
-    #[clap(value_enum, default_value = "polars")]
+    #[clap(value_enum, default_value = "polars-search-example")]
     example_type: ExampleType,
-    #[clap(default_value = "None")]
+    #[clap(default_value = "data/search_example_small.csv")]
     csv_path: Option<String>,
     #[clap(default_value = "text")]
     query: String,

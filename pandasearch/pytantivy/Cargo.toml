@@ -10,9 +10,11 @@ crate-type = ["cdylib"]
 
 [dependencies]
 clap = {version = "4.4.13", features = ["derive"]}
+indicatif = "0.17.7"
 lazy_static = "1.4.0"
 polars = {version = "0.36.2", features = ["csv", "polars-io"]}
 pyo3 = "0.20.2"
 pyo3-polars = "0.10.0"
+rayon = "1.8.0"
 tantivy = "0.21.1"
 tempfile = "3.9.0"

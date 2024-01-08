@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 
 pub struct IndexRegistry {
-    indices: RwLock<HashMap<String, Box<TantivyIndexWrapper>>>,
+    pub indices: RwLock<HashMap<String, Box<TantivyIndexWrapper>>>,
 }
 
 fn from_tantivy_result<T>(tantivy_res: tantivy::Result<T>) -> Result<T, PyErr> {
@@ -52,7 +52,7 @@ impl IndexRegistry {
     pub fn index_document(
         &self,
         name: String,
-        document_map: HashMap<String, String>,
+        document_map: HashMap<&str, String>,
     ) -> Result<(), PyErr> {
         let binding = self.indices.read().unwrap();
         let index_wrapper = binding.get(&name).unwrap();

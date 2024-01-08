@@ -1,4 +1,4 @@
-use crate::wrappers::TantivyIndexWrapper;
+use crate::wrappers::{BatchIndexer, TantivyIndexWrapper};
 use polars::prelude::*;
 
 use polars::datatypes::DataType;
@@ -6,14 +6,53 @@ use std::collections::HashMap;
 pub trait IndexableCollection {
     fn index_collection(&self, index: &TantivyIndexWrapper) -> tantivy::Result<()>;
 }
+use indicatif::ProgressIterator;
+use rayon::prelude::*;
 
 impl IndexableCollection for DataFrame {
     fn index_collection(&self, tantivy_index: &TantivyIndexWrapper) -> tantivy::Result<()> {
-        df_rows_foreach(&self, &|row_hashmap| {
-            tantivy_index.add_document(row_hashmap)
-        })?;
+        index_df_rows(tantivy_index, self);
         Ok(())
     }
+}
+
+fn index_df_rows(tantivy_index: &TantivyIndexWrapper, df: &DataFrame) -> tantivy::Result<()> {
+    // Initialize an empty vector of hashmaps
+    // Get the number of rows
+    let num_rows = df.height();
+
+    let index_fields = tantivy_index.field_names();
+    let columns = df
+        .get_columns()
+        .iter()
+        .filter(|col| col.dtype() == &DataType::String && index_fields.contains(&col.name()))
+        .map(|col| (col.str().unwrap(), col.name().to_string()))
+        .collect::<Vec<_>>();
+
+    // HOW TO MAKE THIS FASTER?
+    // parallel iterator?
+    // iterating over chunks of columns?
+
+    let mut batch_indexer = BatchIndexer::new(tantivy_index);
+
+    let parallel_range = (0..num_rows).into_par_iter();
+    parallel_range.for_each(|row_index| {
+        let mut row_hashmap: HashMap<&str, String> = HashMap::new();
+
+        columns.iter().for_each(|(col, name)| match col.dtype() {
+            DataType::String => {
+                let val = col.get(row_index);
+                let str = val.unwrap_or("None").clone();
+                row_hashmap.insert(&name, str.to_string());
+            }
+            _ => (),
+        });
+
+        // Push the hashmap into the vector
+        batch_indexer.add_document(row_hashmap);
+    });
+    batch_indexer.commit()?;
+    Ok(())
 }
 
 pub fn df_rows_foreach<E>(
@@ -24,22 +63,26 @@ pub fn df_rows_foreach<E>(
     // Get the number of rows
     let num_rows = df.height();
 
+    let columns = df
+        .get_columns()
+        .iter()
+        .filter(|col| col.dtype() == &DataType::String)
+        .map(|col| col.str().unwrap())
+        .collect::<Vec<_>>();
     // Iterate over each row
     for row_index in 0..num_rows {
         // Create a new hashmap for each row
         let mut row_hashmap: HashMap<String, String> = HashMap::new();
 
         // Iterate over each of the columns, add name-value entries to the hashmap
-        df.get_columns().iter().for_each(|s| {
-            let name = s.name().to_string();
-            match s.dtype() {
-                DataType::String => {
-                    let val = s.str().unwrap().get(row_index);
-                    let str = val.unwrap_or("None").clone();
-                    row_hashmap.insert(name, str.to_string());
-                }
-                _ => (),
+        columns.iter().for_each(|col| match col.dtype() {
+            DataType::String => {
+                let name = col.name().to_string();
+                let val = col.get(row_index);
+                let str = val.unwrap_or("None").clone();
+                row_hashmap.insert(name, str.to_string());
             }
+            _ => (),
         });
 
         // Push the hashmap into the vector

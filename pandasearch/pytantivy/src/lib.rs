@@ -25,7 +25,7 @@ fn initialize_index(name: &PyString, name_field: &PyString, fields: &PyList) -> 
 
 #[pyfunction]
 fn index_document<'a>(name: &'a PyString, document_dict: &'a PyDict) -> PyResult<()> {
-    let document_map = document_dict.extract::<HashMap<String, String>>()?;
+    let document_map = document_dict.extract::<HashMap<&str, String>>()?;
 
     INDEX_REGISTRY.index_document(name.to_string(), document_map)
 }
@@ -42,6 +42,18 @@ fn get_index_names<'a>(py: Python<'a>) -> PyResult<&'a PyList> {
     Ok(PyList::new(py, index_names))
 }
 
+// #[pyfunction]
+// fn get_field_names<'a>(py: Python<'a>, name: &'a PyString) -> PyResult<&'a PyList> {
+//     let index = INDEX_REGISTRY
+//         .indices
+//         .read()
+//         .unwrap()
+//         .get(&name.to_string())
+//         .unwrap();
+
+//     Ok(PyList::new(py, index.field_names()))
+// }
+
 #[pyfunction]
 fn index_polars_dataframe(name: &PyString, pydf: PyDataFrame) -> PyResult<()> {
     let df: DataFrame = pydf.into();
@@ -56,6 +68,7 @@ fn pytantivy(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(search, m)?)?;
     m.add_function(wrap_pyfunction!(get_index_names, m)?)?;
     m.add_function(wrap_pyfunction!(index_polars_dataframe, m)?)?;
+    // m.add_function(wrap_pyfunction!(get_field_names, m)?)?;
 
     Ok(())
 }
