@@ -4,3 +4,6 @@
 [submodule "llm_search/verba/Verba"]
 	path = llms/verba/Verba
 	url = https://github.com/weaviate/Verba
+[submodule "fastrag_util/fastRAG"]
+	path = fastrag_util/fastRAG
+	url = https://github.com/IntelLabs/fastRAG

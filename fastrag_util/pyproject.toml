@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "fastrag_util"
+version = "0.1.0"
+description = ""
+authors = ["Jakub 'lambdaofgod' Bartczuk <bartczukkuba@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.12"
+colbert = {path = "fastRAG/libs/colbert"}
+ipykernel = "^6.29.0"
+pandas = "^2.2.0"
+nltk = "^3.8.1"
+faiss-cpu = "1.7.2"
+fastrag = {path = "fastRAG"}
+fire = "^0.5.0"
+langdetect = "^1.0.9"
+chardet = "^5.2.0"
+fastapi = "^0.109.1"
+uvicorn = "^0.27.0.post1"
+dvc = "^3.43.1"
+
+
+[tool.poetry.group.dev.dependencies]
+ipdb = "^0.13.13"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
