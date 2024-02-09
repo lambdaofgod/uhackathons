@@ -2,6 +2,5 @@ corpus_df_path: "data/paperswithcode_with_readmes.json.gz"
 text_col: "readme"
 title_col: "repo"
 collection_path: "output/readme_doc_coll.tsv"
-n_docs: 10
 additional_cols: ["tasks"]
 index_save_path: "output/indices/paperswithcode_with_readmes_index"

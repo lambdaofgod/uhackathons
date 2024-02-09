@@ -21,12 +21,13 @@ def prepare_doc_coll_df(df: pd.DataFrame, text_column: str, doc_len: int, title_
         lambda x: whitespace_re.sub(" ", x[:doc_len]))
     doc_coll_df = pd.DataFrame({"content": text_coll})
 
-    doc_coll_df['id'] = range(1, len(df)+1)
-    doc_coll_df = doc_coll_df[['id', 'content']]
+    doc_coll_df = doc_coll_df[['content']]
     if title_column:
         doc_coll_df['title'] = df[title_column]
+        doc_coll_df = doc_coll_df.drop_duplicates(subset=["title"])
     for col in additional_cols:
         doc_coll_df[col] = df[col]
+    doc_coll_df['id'] = range(1, len(doc_coll_df)+1)
     return doc_coll_df
 
 
@@ -78,9 +79,14 @@ def create_doc_collection(
     # readme = offending_row['content']
     # import ipdb
     # ipdb.set_trace()
-
-    doc_coll_df.to_csv(output_path, sep="\t", index=False,
-                       errors="ignore", escapechar="\\")
+    ordered_cols = ["id", "content"]
+    if title_column:
+        ordered_cols.append("title")
+    ordered_cols.extend(additional_cols)
+    (
+        doc_coll_df[ordered_cols]
+        .to_csv(output_path, sep="\t", escapechar="\\", index=False)
+    )
 
 
 if __name__ == '__main__':

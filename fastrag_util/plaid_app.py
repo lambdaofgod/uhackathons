@@ -4,24 +4,53 @@ import uvicorn
 import fire
 from haystack import Document
 from typing import List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from app_util import ExceptionResponse, exception_handler, ipdb_exception_handler
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 app = fastapi.FastAPI()
 
 
 class SearchArgs(BaseModel):
     query: str
-    k: int = 10
+    top_k: int = Field(default=10)
+
+
+class GroupedSearchArgs(SearchArgs):
+    group_by: str = Field(default="title")
+    raw_docs_topk: int = Field(default=1000)
+
+
+@app.exception_handler(ExceptionResponse)
+async def app_exception_handler(request: Request, exc: ExceptionResponse):
+    return JSONResponse(
+        status_code=418,
+        content={"message": f"App error: {exc.name}\n Reason: {exc.reason}"},
+    )
 
 
 @app.post("/search")
-def search(search_args: SearchArgs) -> List[Document]:
-    results = app.state.plaid_index.query(search_args.query)
+def search(search_args: SearchArgs) -> List[dict]:
+    with ipdb_exception_handler("search"):
+        results = app.state.plaid_index.query(**search_args.dict())
+        results = [doc.to_dict() for doc in results]
     return results
 
 
-def main(port=4321, host="0.0.0.0"):
-    app.state.plaid_index = PlaidIndex.create_index(IndexConfig())
+@app.post("/search_grouped")
+def search_grouped(search_args: GroupedSearchArgs) -> List[dict]:
+    with ipdb_exception_handler("search"):
+        results = app.state.plaid_index.query_grouped(**search_args.dict())
+    return results
+
+
+def main(port=4321, host="0.0.0.0", config_path=None):
+    if config_path is None:
+        config = IndexConfig()
+    else:
+        config = IndexConfig.load_from_indexing_config_path(config_path)
+    app.state.plaid_index = PlaidIndex.create_index(config)
     uvicorn.run(app, host=host, port=port)
 
 
