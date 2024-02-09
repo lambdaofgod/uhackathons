@@ -1,0 +1,8 @@
+corpus_df_path: "data/python_files.json"
+text_col: "content"
+title_col: "name"
+n_docs: 5000
+collection_path: "output/python_code_doc_coll.tsv"
+additional_cols: ["tasks", "repo_name", "path"]
+index_save_path: "output/indices/python_code_index_small"
+doc_len: 4096

@@ -1,0 +1,157 @@
+#+title: Python_code_querying
+
+
+#+BEGIN_SRC python :session python_code_querying.org  :exports both
+from search_client import SearchClient, ResultEvaluator
+import tqdm
+import pandas as pd
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session python_code_querying.org  :exports both
+searcher = SearchClient()
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session python_code_querying.org  :exports both
+queries = ['general classification',
+ 'image classification',
+ 'semantic segmentation',
+ 'object detection',
+ 'translation',
+ 'reinforcement learning',
+ 'classification',
+ 'language modelling',
+ 'representation learning',
+ 'question answering',
+ 'machine translation',
+ 'transfer learning',
+ 'image generation',
+ 'sentiment analysis',
+ 'frame',
+ 'data augmentation',
+ 'time series',
+ 'text classification',
+ 'domain adaptation',
+ 'super resolution',
+ 'pose estimation',
+ 'natural language inference',
+ 'real time object detection',
+ 'instance segmentation',
+ 'decision making',
+ 'person re identification',
+ 'named entity recognition',
+ 'image to image translation',
+ 'word embeddings',
+ 'denoising',
+ 'text generation',
+ 'style transfer',
+ 'recommendation systems',
+ 'natural language understanding',
+ 'self supervised learning',
+ 'speech recognition',
+ 'meta learning',
+ 'multi task learning',
+ 'text summarization',
+ 'medical image segmentation',
+ 'contrastive learning',
+ 'neural architecture search',
+ 'action recognition',
+ 'autonomous driving',
+ 'image super resolution',
+ 'abstractive text summarization',
+ 'variational inference',
+ 'anomaly detection',
+ 'q learning',
+ 'link prediction'
+]
+
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session python_code_querying.org  :exports both :async
+query_results = {
+q: searcher.search_grouped(query=q, group_by="repo_name", raw_docs_topk=5000)
+    for q in tqdm.tqdm(queries)
+}
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session python_code_querying.org  :exports both
+evaluator = ResultEvaluator(result_key="repo_name", true_queries_key="tasks")
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session python_code_querying.org  :exports both
+evaluation_results_df = pd.DataFrame.from_records([
+    {"task": query, **evaluator.get_metrics(results, query)}
+     for (query, results) in query_results.items()
+])
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session python_code_querying.org  :exports both
+evaluation_results_df
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+                              task  hits@10  accuracy@10
+0           general classification        0          0.0
+1             image classification        1          0.1
+2            semantic segmentation        7          0.7
+3                 object detection        8          0.8
+4                      translation        4          0.4
+5           reinforcement learning        5          0.5
+6                   classification        1          0.1
+7               language modelling        1          0.1
+8          representation learning        0          0.0
+9               question answering        0          0.0
+10             machine translation        2          0.2
+11               transfer learning        1          0.1
+12                image generation        1          0.1
+13              sentiment analysis        1          0.1
+14                           frame        0          0.0
+15               data augmentation        2          0.2
+16                     time series        0          0.0
+17             text classification        1          0.1
+18               domain adaptation        1          0.1
+19                super resolution        3          0.3
+20                 pose estimation        3          0.3
+21      natural language inference        0          0.0
+22      real time object detection        3          0.3
+23           instance segmentation        4          0.4
+24                 decision making        0          0.0
+25        person re identification        1          0.1
+26        named entity recognition        0          0.0
+27      image to image translation        0          0.0
+28                 word embeddings        0          0.0
+29                       denoising        1          0.1
+30                 text generation        1          0.1
+31                  style transfer        0          0.0
+32          recommendation systems        3          0.3
+33  natural language understanding        0          0.0
+34        self supervised learning        0          0.0
+35              speech recognition        4          0.4
+36                   meta learning        0          0.0
+37             multi task learning        0          0.0
+38              text summarization        1          0.1
+39      medical image segmentation        0          0.0
+40            contrastive learning        0          0.0
+41      neural architecture search        2          0.2
+42              action recognition        3          0.3
+43              autonomous driving        0          0.0
+44          image super resolution        2          0.2
+45  abstractive text summarization        1          0.1
+46           variational inference        1          0.1
+47               anomaly detection        0          0.0
+48                      q learning        1          0.1
+49                 link prediction        1          0.1
+#+end_example

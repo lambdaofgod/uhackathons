@@ -28,8 +28,7 @@ poetry run python plaid_app.py -c $CONF_PATH
 ### Separate steps
 
 ```bash 
-poetry run python create_doc_collection.py $CORPUS_DF_PATH $TEXT_COL --n_docs=1000 --title_column=$TITLE_COL
-```
+poetry run python create_doc_collection.py from_config $CONF_PATH```
 
 ```bash 
 poetry run python create_plaid_index.py --checkpoint Intel/ColBERT-NQ --collection doc_coll.tsv --index-save-path plaid_index --gpus 1 --doc-max-length 256
