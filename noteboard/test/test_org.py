@@ -1,4 +1,5 @@
 from noteboard import org
+import noteboard
 import pytest
 
 
@@ -13,4 +14,4 @@ def test_parse_links():
 
 
 def test_loads(org_contents):
-    assert len(org.Org.loads(org_contents)) == 11
+    assert len(noteboard.Org.loads(org_contents)) == 11
