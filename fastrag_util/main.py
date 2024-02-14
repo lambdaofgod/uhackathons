@@ -5,8 +5,7 @@ import os
 import pandas as pd
 from fastrag.stores import PLAIDDocumentStore
 
-from create_doc_collection import \
-    create_doc_collection as create_doc_collection_main
+from create_doc_collection import CollectionBuilder
 import fire
 import yaml
 from pydantic import BaseModel, Field
@@ -25,8 +24,8 @@ class Main:
         doc_len: int = 1024,
         additional_cols=["tasks"]
     ):
-        create_doc_collection_main(input_path, text_column, output_path,
-                                   title_column, n_docs, doc_len, additional_cols)
+        CollectionBuilder.create_doc_collection(input_path, text_column, output_path,
+                                                title_column, n_docs, doc_len, additional_cols)
 
     def make_plaid_index(self, checkpoint: Path, collection: Path, index_save_path: Path, gpus: int = 0, ranks: int = 1, doc_max_length: int = 120, query_max_length: int = 60, kmeans_iterations: int = 4, name: str = "plaid_index", nbits: int = 2):
         t_0 = time.perf_counter()

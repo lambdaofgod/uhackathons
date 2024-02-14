@@ -71,6 +71,8 @@ queries = ['general classification',
 
 #+END_SRC
 
+#+RESULTS:
+
 #+BEGIN_SRC python :session querying.org  :exports both :async
 query_results = {
 q: searcher.search_grouped(query=q, group_by="repo_name", raw_docs_topk=5000)

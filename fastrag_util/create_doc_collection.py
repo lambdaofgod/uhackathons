@@ -62,7 +62,7 @@ def filter_texts(df: pd.DataFrame, text_col: str, title_col: Optional[str], min_
     return df
 
 
-class Main:
+class CollectionBuilder:
 
     @staticmethod
     def create_doc_collection(
@@ -101,8 +101,8 @@ class Main:
         with open(config_path) as f:
             config_dict = yaml.safe_load(f)
         config = SetupDocCollectionConfig(**config_dict)
-        Main.create_doc_collection(**config.dict())
+        CollectionBuilder.create_doc_collection(**config.dict())
 
 
 if __name__ == '__main__':
-    fire.Fire(Main)
+    fire.Fire(CollectionBuilder)
