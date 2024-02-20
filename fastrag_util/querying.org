@@ -10,7 +10,6 @@ import pandas as pd
 #+RESULTS:
 
 #+BEGIN_SRC python :session querying.org  :exports both
-searcher = SearchClient()
 #+END_SRC
 
 #+RESULTS:
@@ -74,84 +73,65 @@ queries = ['general classification',
 #+RESULTS:
 
 #+BEGIN_SRC python :session querying.org  :exports both :async
-query_results = {
-q: searcher.search_grouped(query=q, group_by="repo_name", raw_docs_topk=5000)
-    for q in tqdm.tqdm(queries)
-}
+def run_evaluation(api_url, id_field="repo_name", query_field="tasks"):
+    searcher = SearchClient(api_url=api_url)
+    query_results = {
+        q: searcher.search_grouped(query=q, group_by=id_field, raw_docs_topk=5000)
+            for q in tqdm.tqdm(queries)
+    }
+
+    evaluator = ResultEvaluator(result_key=id_field, true_queries_key=query_field)
+    evaluation_results_df = pd.DataFrame.from_records([
+        {query_field: query, **evaluator.get_metrics(results, query)}
+        for (query, results) in query_results.items()
+    ])
+    return evaluation_results_df
 #+END_SRC
 
 #+RESULTS:
 
-#+BEGIN_SRC python :session querying.org  :exports both
-evaluator = ResultEvaluator(result_key="repo_name", true_queries_key="tasks")
+* READMEs
+
+This requires setting up the index with
+
+```
+poetry run python plaid_app.py -c conf/index_readme_config.yaml
+```
+
+#+BEGIN_SRC python :session querying.org  :exports both :async
+readme_evaluation_df = run_evaluation('http://localhost:4321', "title")
 #+END_SRC
 
 #+RESULTS:
 
-#+BEGIN_SRC python :session querying.org  :exports both
-evaluation_results_df = pd.DataFrame.from_records([
-    {"task": query, **evaluator.get_metrics(results, query)}
-     for (query, results) in query_results.items()
-])
+#+BEGIN_SRC python :session querying.org  :exports both :async
+readme_evaluation_df.drop(columns=["tasks"]).mean()
+#+END_SRC
+
+#+RESULTS:
+: hits@10        6.80
+: accuracy@10    0.94
+: dtype: float64
+
+* Code (sample)
+
+run
+
+```
+poetry run python plaid_app.py -c conf/index_code_config.yaml -p 5432
+```
+
+#+BEGIN_SRC python :session querying.org  :exports both :async
+code_evaluation_df = run_evaluation('http://localhost:5432', "repo_name")
 #+END_SRC
 
 #+RESULTS:
 
-#+BEGIN_SRC python :session querying.org  :exports both
-evaluation_results_df
+#+BEGIN_SRC python :session querying.org  :exports both :async
+code_evaluation_df.drop(columns=["tasks"]).mean()
 #+END_SRC
 
 #+RESULTS:
-#+begin_example
-                              task  hits@10  accuracy@10
-0           general classification        0          0.0
-1             image classification        1          0.1
-2            semantic segmentation        7          0.7
-3                 object detection        8          0.8
-4                      translation        4          0.4
-5           reinforcement learning        5          0.5
-6                   classification        1          0.1
-7               language modelling        1          0.1
-8          representation learning        0          0.0
-9               question answering        0          0.0
-10             machine translation        2          0.2
-11               transfer learning        1          0.1
-12                image generation        1          0.1
-13              sentiment analysis        1          0.1
-14                           frame        0          0.0
-15               data augmentation        2          0.2
-16                     time series        0          0.0
-17             text classification        1          0.1
-18               domain adaptation        1          0.1
-19                super resolution        3          0.3
-20                 pose estimation        3          0.3
-21      natural language inference        0          0.0
-22      real time object detection        3          0.3
-23           instance segmentation        4          0.4
-24                 decision making        0          0.0
-25        person re identification        1          0.1
-26        named entity recognition        0          0.0
-27      image to image translation        0          0.0
-28                 word embeddings        0          0.0
-29                       denoising        1          0.1
-30                 text generation        1          0.1
-31                  style transfer        0          0.0
-32          recommendation systems        3          0.3
-33  natural language understanding        0          0.0
-34        self supervised learning        0          0.0
-35              speech recognition        4          0.4
-36                   meta learning        0          0.0
-37             multi task learning        0          0.0
-38              text summarization        1          0.1
-39      medical image segmentation        0          0.0
-40            contrastive learning        0          0.0
-41      neural architecture search        2          0.2
-42              action recognition        3          0.3
-43              autonomous driving        0          0.0
-44          image super resolution        2          0.2
-45  abstractive text summarization        1          0.1
-46           variational inference        1          0.1
-47               anomaly detection        0          0.0
-48                      q learning        1          0.1
-49                 link prediction        1          0.1
-#+end_example
+: hits@10        4.62
+: accuracy@10    0.90
+: dtype: float64

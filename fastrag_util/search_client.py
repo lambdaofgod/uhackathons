@@ -39,7 +39,7 @@ class ResultEvaluator(BaseModel):
     def get_metrics(self, results, query, k=10):
         checked_results = self.check_results(results, query)[:k]
         n_hits = len([res for res in checked_results if res["do_match"]])
-        return {f"hits@{k}": n_hits, f"accuracy@{k}": n_hits / k}
+        return {f"hits@{k}": n_hits, f"accuracy@{k}": n_hits > 0}
 
     def check_results(self, results, query):
         return [self.get_match_result(res, query) for res in results]
