@@ -1,0 +1,7 @@
+corpus_df_path: "data/python_selected_files.parquet"
+text_col: "content"
+title_col: "path"
+collection_path: "output/python_code_doc_coll.tsv"
+additional_cols: ["tasks", "repo_name"]
+index_save_path: "output/indices/python_code_index"
+doc_len: 4096
