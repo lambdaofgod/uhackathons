@@ -1,0 +1,88 @@
+#+title: Howto_vespa_rag
+
+
+* Setup
+
+```
+poetry run python vespa_app.py export_app vespa_app
+```
+
+Go to vespa_app
+
+```
+vespa deploy --wait 300
+```
+
+*Adding documents*
+
+These documents are loaded from document collection from fastrag_util
+
+```
+poetry run python vespa_app.py add_documents_from_csv vespa_app/files/small_python_code_doc_coll.tsv
+```
+
+* Imports
+
+#+BEGIN_SRC python :session HOWTO_VESPA_RAG.org  :exports both
+from documents import CSVLoader
+from vespa.io import VespaQueryResponse
+import json
+from vespa.application import Vespa
+#+END_SRC
+
+#+RESULTS:
+
+* Document loader
+
+#+BEGIN_SRC python :session HOWTO_VESPA_RAG.org  :exports both
+loader = CSVLoader()
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session HOWTO_VESPA_RAG.org  :exports both
+docs = list(loader.get_documents_feed("files/small_python_code_doc_coll.tsv", "title", "content", "\t"))
+#+END_SRC
+
+#+RESULTS:
+
+* Querying
+
+#+BEGIN_SRC python :session HOWTO_VESPA_RAG.org  :exports both
+app = Vespa(url="http://localhost", port=8080)
+
+def get_query_response(app, query):
+    return app.query(
+        yql="select id,name,chunks,metadata from csvrag where userQuery() or ({targetHits:10}nearestNeighbor(embedding,q))",
+        groupname="admin",
+        ranking="hybrid",
+        query=query,
+        body={
+            "presentation.format.tensors": "short-value",
+            "input.query(q)": f'embed(e5, \"{query}\")',
+        }
+    )
+
+
+def get_result_doc(hit_record, metadata_fields=["repo_name", "tasks"]):
+    metadata_doc = {
+        field: hit_record["fields"]["metadata"][field]
+        for field in metadata_fields
+    }
+    return {"name": hit_record["fields"]["name"], **metadata_doc, "relevance": hit_record["relevance"]}
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session HOWTO_VESPA_RAG.org  :exports both
+response = get_query_response(app, "object detection")
+assert(response.is_successful())
+
+
+result_docs = [get_result_doc(hit_record) for hit_record in response.hits]
+
+for doc in result_docs:
+    print(doc)
+#+END_SRC
+
+#+RESULTS:

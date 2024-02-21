@@ -1,0 +1,92 @@
+#+title: Vespa_howto
+
+* Docker setup
+
+https://docs.vespa.ai/en/vespa-quick-start.html
+
+** Run container
+
+```
+docker run --detach --name vespa --hostname vespa-container \
+  --publish 8080:8080 --publish 19071:19071 \
+  vespaengine/vespa
+```
+
+** Setting up Vespa CLI
+
+Download vespa from
+https://github.com/vespa-engine/vespa/releases/download/v8.302.40/vespa-cli_8.302.40_linux_amd64.tar.gz
+
+It contains executable vespa in bin, move it to bin
+
+*Vespa requires a folder for its file*
+I've made ~/.vespa_home and set VESPA_CLI_HOME in bashrc
+
+*Configure CLI*
+vespa config set target local
+
+* Apps
+
+** Vespa examples app
+
+After running
+
+```
+vespa clone album-recommendation examples/myapp && cd examples/myapp
+```
+
+*deploy*
+
+```
+vespa deploy --wait
+```
+
+*index*
+
+`vespa feed ext/documents.jsonl`
+
+*** Query
+
+```
+vespa query "select * from music where album contains 'head'" \
+  language=en-US
+```
+
+** Configuring app using Python
+
+https://blog.vespa.ai/turbocharge-rag-with-langchain-and-vespa-streaming-mode/
+
+I made an app from this in examples/pdf_rag
+
+#+BEGIN_SRC python :session VESPA_HOWTO.org  :exports both
+from vespa.io import VespaQueryResponse
+import json
+from vespa.application import Vespa
+
+app = Vespa(url="http://localhost", port=8080)
+response:VespaQueryResponse = app.query(
+    yql="select id,title,page,chunks from pdfrag where userQuery() or ({targetHits:10}nearestNeighbor(embedding,q))",
+    groupname="admin",
+    ranking="hybrid",
+    query="why is colbert effective?",
+    body={
+        "presentation.format.tensors": "short-value",
+        "input.query(q)": "embed(e5, \"why is colbert effective?\")",
+    }
+)
+assert(response.is_successful())
+print(json.dumps(response.hits[0], indent=2))
+#+END_SRC
+
+#+RESULTS:
+
+* Troubleshooting
+
+** Not enough space
+By default writing to vespa will fail if the disk is >3/4 full.
+
+This can be configured per app like here
+https://pyvespa.readthedocs.io/en/latest/application-packages.html#Deploy-from-modified-files
+
+
+* Configuring app in Python
