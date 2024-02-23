@@ -27,7 +27,7 @@ class Main:
         CollectionBuilder.create_doc_collection(input_path, text_column, output_path,
                                                 title_column, n_docs, doc_len, additional_cols)
 
-    def make_plaid_index(self, checkpoint: Path, collection: Path, index_save_path: Path, gpus: int = 0, ranks: int = 1, doc_max_length: int = 120, query_max_length: int = 60, kmeans_iterations: int = 4, name: str = "plaid_index", nbits: int = 2):
+    def make_plaid_index(self, checkpoint: Path, collection: Path, index_save_path: Path, gpus: int = 0, bsize: int = 256, ranks: int = 1, doc_max_length: int = 120, query_max_length: int = 60, kmeans_iterations: int = 4, name: str = "plaid_index", nbits: int = 2):
         t_0 = time.perf_counter()
         store = PLAIDDocumentStore(
             index_path=f"{index_save_path}",
@@ -40,19 +40,23 @@ class Main:
             doc_maxlen=doc_max_length,
             query_maxlen=query_max_length,
             kmeans_niters=kmeans_iterations,
+            bsize=bsize
         )
         t_end = time.perf_counter()
         print(f"Indexing took {t_end - t_0:.2f} seconds")
 
-    def create_plaid_index_with_config(self, config_path: Path):
+    def create_plaid_index_with_config(self, config_path: Path, override_doc_col=False):
         config = IndexingConfig.load(config_path)
-        self.create_doc_collection(
-            config.corpus_df_path, config.text_col, config.collection_path,
-            config.title_col, config.n_docs, config.doc_len, config.additional_cols
-        )
+        if os.path.exists(config.collection_path) and not override_doc_col:
+            print("skipping creating doc collection as it already exists")
+        else:
+            self.create_doc_collection(
+                config.corpus_df_path, config.text_col, config.collection_path,
+                config.title_col, config.n_docs, config.doc_len, config.additional_cols
+            )
         self.make_plaid_index(
             config.checkpoint, config.collection_path, config.index_save_path,
-            config.gpus, config.ranks, config.doc_max_length, config.query_max_length,
+            config.gpus, config.batch_size, config.ranks, config.doc_max_length, config.query_max_length,
             config.kmeans_iterations, config.name, config.nbits
         )
 

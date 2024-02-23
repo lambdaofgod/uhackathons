@@ -8,6 +8,9 @@ from pydantic import BaseModel, Field
 from app_util import ExceptionResponse, exception_handler, ipdb_exception_handler
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+import logging
+
+logging.basicConfig(level="INFO")
 
 app = fastapi.FastAPI()
 
@@ -45,12 +48,18 @@ def search_grouped(search_args: GroupedSearchArgs) -> List[dict]:
     return results
 
 
-def main(port=4321, host="0.0.0.0", config_path=None):
+def main(port=4321, host="0.0.0.0", config_path=None, extra_logging=None, log_filename=None):
     if config_path is None:
+        logging.warn("no config path specified, loading default config")
         config = IndexConfig()
     else:
         config = IndexConfig.load_from_indexing_config_path(config_path)
-    app.state.plaid_index = PlaidIndex.create_index(config)
+    if log_filename is not None:
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
+        logging.basicConfig(level="INFO", filename=log_filename)
+        logging.info(f"storing logs to {log_filename}")
+    app.state.plaid_index = PlaidIndex.create_index(config, extra_logging)
     uvicorn.run(app, host=host, port=port)
 
 

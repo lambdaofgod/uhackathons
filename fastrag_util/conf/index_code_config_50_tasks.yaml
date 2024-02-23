@@ -5,3 +5,4 @@ collection_path: "output/python_code_50_tasks_doc_coll.tsv"
 additional_cols: ["tasks", "repo_name", "path"]
 index_save_path: "output/indices/python_code_50_tasks_index"
 doc_len: 4096
+batch_size: 512

@@ -4,3 +4,4 @@ title_col: "repo"
 collection_path: "output/readme_doc_coll.tsv"
 additional_cols: ["tasks"]
 index_save_path: "output/indices/paperswithcode_with_readmes_index"
+batch_size: 512

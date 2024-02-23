@@ -2,20 +2,19 @@
 
 
 #+BEGIN_SRC python :session querying.org  :exports both
-from search_client import SearchClient, ResultEvaluator
+from search_client import SearchClient
 import tqdm
 import pandas as pd
+import scipy.stats
+import seaborn as sns
+import matplotlib.pyplot as plt
+from search_evaluation import ColBERTResultEvaluator
 #+END_SRC
 
 #+RESULTS:
 
 #+BEGIN_SRC python :session querying.org  :exports both
-#+END_SRC
-
-#+RESULTS:
-
-#+BEGIN_SRC python :session querying.org  :exports both
-queries = ['general classification',
+selected_queries = ['general classification',
  'image classification',
  'semantic segmentation',
  'object detection',
@@ -72,20 +71,54 @@ queries = ['general classification',
 
 #+RESULTS:
 
-#+BEGIN_SRC python :session querying.org  :exports both :async
-def run_evaluation(api_url, id_field="repo_name", query_field="tasks"):
-    searcher = SearchClient(api_url=api_url)
-    query_results = {
-        q: searcher.search_grouped(query=q, group_by=id_field, raw_docs_topk=5000)
-            for q in tqdm.tqdm(queries)
-    }
+To load tasks we need to load a dataset that contains them
 
-    evaluator = ResultEvaluator(result_key=id_field, true_queries_key=query_field)
-    evaluation_results_df = pd.DataFrame.from_records([
-        {query_field: query, **evaluator.get_metrics(results, query)}
-        for (query, results) in query_results.items()
-    ])
-    return evaluation_results_df
+#+BEGIN_SRC python :session querying.org  :exports both
+import pandas as pd
+
+python_code_collection_df = pd.read_csv("output/python_code_doc_coll.tsv", sep="\t")
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session querying.org  :exports both
+def get_per_repo_task_counts(collection_df, min_count=10):
+    raw_repo_tasks = collection_df.drop_duplicates("repo_name")["tasks"]
+    parsed_tasks = raw_repo_tasks.apply(lambda s: s.replace("[", "").replace("]", "").split(", "))
+    task_counts = parsed_tasks.explode().value_counts()
+    return task_counts[task_counts >= min_count].reset_index().rename({"tasks": "task", "count": "doc_count"}, axis=1)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session querying.org  :exports both
+repo_tasks_with_counts = get_per_repo_task_counts(python_code_collection_df)
+
+repo_tasks_with_counts
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+                               task  doc_count
+0            general classification       4386
+1              image classification       2929
+2             semantic segmentation       2809
+3                  object detection       2769
+4            reinforcement learning       2499
+..                              ...        ...
+903                 seismic imaging         10
+904    handwritten text recognition         10
+905   automated feature engineering         10
+906  multi target domain adaptation         10
+907          human pose forecasting         10
+
+[908 rows x 2 columns]
+#+end_example
+
+#+BEGIN_SRC python :session querying.org  :exports both :async
+code_evaluator = ColBERTResultEvaluator(api_url="http://localhost:5432", true_queries_field="tasks")
+readme_evaluator = ColBERTResultEvaluator(api_url="http://localhost:5432", true_queries_field="tasks")
 #+END_SRC
 
 #+RESULTS:
@@ -99,39 +132,293 @@ poetry run python plaid_app.py -c conf/index_readme_config.yaml
 ```
 
 #+BEGIN_SRC python :session querying.org  :exports both :async
-readme_evaluation_df = run_evaluation('http://localhost:4321', "title")
+readme_evaluation_df = readme_evaluator.get_evaluation_df(readme_evaluator.prepare_queries_df(repo_tasks_with_counts, query_field="task"))
 #+END_SRC
 
 #+RESULTS:
 
 #+BEGIN_SRC python :session querying.org  :exports both :async
-readme_evaluation_df.drop(columns=["tasks"]).mean()
+readme_evaluation_df.drop(columns=["tasks", "query_doc_count"]).mean()
 #+END_SRC
 
 #+RESULTS:
-: hits@10        6.80
-: accuracy@10    0.94
+: hits@10        4.559471
+: accuracy@10    0.864537
 : dtype: float64
 
-* Code (sample)
 
-run
+* ColBERT & Python code
+
+Run the app
 
 ```
 poetry run python plaid_app.py -c conf/index_code_config.yaml -p 5432
 ```
 
 #+BEGIN_SRC python :session querying.org  :exports both :async
-code_evaluation_df = run_evaluation('http://localhost:5432', "repo_name")
+code_evaluation_df = code_evaluator.get_evaluation_df(code_evaluator.prepare_queries_df(repo_tasks_with_counts, query_field="task"))
+#+END_SRC
+
+#+RESULTS:
+
+These results are better than librarian model's.
+
+#+BEGIN_SRC python :session querying.org  :exports both :async
+code_evaluation_df.drop(columns=["query", "query_label", "query_doc_count"]).mean()
+#+END_SRC
+
+#+RESULTS:
+: hits@10        1.582599
+: accuracy@10    0.561674
+: dtype: float64
+
+
+PREVIOUS
+#+RESULTS:
+: hits@10        1.584802
+: accuracy@10    0.563877
+: dtype: float64
+
+
+** Analyzing the results
+
+*** Results vs # repos per task
+
+Readmes
+
+#+BEGIN_SRC python :session querying.org  :exports both :async
+scipy.stats.kendalltau(readme_evaluation_df["query_doc_count"], readme_evaluation_df["hits@10"])
+#+END_SRC
+
+#+RESULTS:
+: SignificanceResult(statistic=0.2387658685111492, pvalue=1.4630829186299547e-24)
+
+Code
+
+#+BEGIN_SRC python :session querying.org  :exports both :async
+scipy.stats.kendalltau(code_evaluation_df["query_doc_count"], code_evaluation_df["hits@10"])
+#+END_SRC
+
+#+RESULTS:
+: SignificanceResult(statistic=0.3273320584653267, pvalue=3.3049827063046647e-40)
+
+#+BEGIN_SRC python :session querying.org  :exports both
+class ResultsAnalyzer:
+
+    @classmethod
+    def _get_docs_per_hit(cls, evaluation_df, n_hits):
+        return evaluation_df[evaluation_df["hits@10"] == n_hits]
+
+    @classmethod
+    def get_mean_doc_count_per_hit(cls, evaluation_df):
+        return {
+            n_hits: cls._get_docs_per_hit(evaluation_df, n_hits)["query_doc_count"].mean()
+            for n_hits in range(0, 11)
+        }
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session querying.org  :exports both
+readme_repos_per_hit = ResultsAnalyzer.get_mean_doc_count_per_hit(readme_evaluation_df)
+
+code_repos_per_hit = ResultsAnalyzer.get_mean_doc_count_per_hit(code_evaluation_df)
+#+END_SRC
+
+#+RESULTS:
+*** READMEs
+
+#+BEGIN_SRC python :session querying.org  :exports both
+readme_repos_per_hit[0]
+#+END_SRC
+
+#+RESULTS:
+: 60.47154471544715
+
+#+BEGIN_SRC python :session querying.org  :exports both :results file link
+fig=plt.figure(figsize=(3,2))
+plt.plot(readme_repos_per_hit.keys(), readme_repos_per_hit.values())
+fig.tight_layout()
+
+fname = '/tmp/readme_doc_count_per_hit.png'
+plt.savefig(fname)
+fname # return this to org-mode
+#+END_SRC
+
+#+RESULTS:
+[[file:/tmp/readme_doc_count_per_hit.png]]
+
+*** Code
+
+#+BEGIN_SRC python :session querying.org  :exports both
+code_repos_per_hit[0]
+#+END_SRC
+
+#+RESULTS:
+: 48.406565656565654
+
+#+BEGIN_SRC python :session querying.org  :exports both :results file link
+fig=plt.figure(figsize=(3,2))
+plt.plot(code_repos_per_hit.keys(), code_repos_per_hit.values())
+fig.tight_layout()
+
+fname = '/tmp/code_doc_count_per_hit.png'
+plt.savefig(fname)
+fname # return this to org-mode
+#+END_SRC
+
+#+RESULTS:
+[[file:/tmp/code_doc_count_per_hit.png]]
+
+#+BEGIN_SRC python :session querying.org  :exports both
+code_evaluation_df.sort_values("hits@10")[ "query_doc_count"].iloc[-n_10pct:].mean()
+#+END_SRC
+
+#+RESULTS:
+: 328.35555555555555
+
+
+** Does ColBERT help with the repos with worst performing READMEs?
+
+BM25's performance on READMEs means that our dataset is biased - most READMEs are easy to retrieve which is not true of github repositories in general.
+
+Still, because ~10% of tasks didn't have any matching document in top 10 retrieved results, we will focus on them to simulate a realistic search scenario.
+
+#+BEGIN_SRC python :session querying.org  :exports both
+readme_worst_tasks = readme_evaluation_df[readme_evaluation_df["hits@10"] == 0]
+
+code_worst_tasks = code_evaluation_df[code_evaluation_df["hits@10"] == 0]
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session querying.org  :exports both
+overlapping_worst_tasks = set(code_worst_tasks["tasks"]).intersection(set(readme_worst_tasks["tasks"]))
+
+n_overlapping_tasks = len(overlapping_worst_tasks)
+{
+    "n_overlapping_tasks": n_overlapping_tasks,
+    "n_overlapping_tasks / n_worst_code_tasks": n_overlapping_tasks / len(code_worst_tasks["tasks"]),
+    "n_overlapping_tasks / n_worst_readme_tasks": n_overlapping_tasks / len(readme_worst_tasks["tasks"])
+}
+#+END_SRC
+
+#+RESULTS:
+| n_overlapping_tasks | : | 101 | n_overlapping_tasks / n_worst_code_tasks | : | 0.255050505050505 | n_overlapping_tasks / n_worst_readme_tasks | : | 0.8211382113821138 |
+
+#+BEGIN_SRC python :session querying.org  :exports both
+repo_tasks_with_counts.loc[code_worst_tasks["tasks"]]
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+tasks
+text classification               852
+style transfer                    533
+natural language understanding    531
+denoising                         505
+common sense reasoning            393
+                                 ...
+seismic imaging                    10
+handwritten text recognition       10
+automated feature engineering      10
+multi target domain adaptation     10
+human pose forecasting             10
+Name: count, Length: 396, dtype: int64
+#+end_example
+
+** Query expansion
+
+*** Generating queries to search code
+
+#+BEGIN_AI
+Write 10 function names that might be found in a Python project
+#+END_AI
+
+*** PwC Task descriptions
+
+**** Setup
+#+BEGIN_SRC python :session querying.org  :exports both
+raw_pwc_tasks_metadata_df = pd.read_csv("data/paperswithcode_tasks.csv")
+
+valid_pwc_tasks_metadata_df = raw_pwc_tasks_metadata_df.dropna()
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session querying.org  :exports both
+valid_pwc_tasks_metadata_df.columns
+#+END_SRC
+
+#+RESULTS:
+: Index(['area', 'task', 'task_description'], dtype='object')
+
+#+BEGIN_SRC python :session querying.org  :exports both
+[
+    ("raw pwc tasks", raw_pwc_tasks_metadata_df.shape),
+    ("pwc tasks", valid_pwc_tasks_metadata_df.shape)
+]
+#+END_SRC
+
+#+RESULTS:
+| raw pwc tasks | (2846 3) |
+| pwc tasks     | (1502 3) |
+
+We select only the tasks that were used as queries
+
+#+BEGIN_SRC python :session querying.org  :exports both
+pwc_tasks_metadata_df = valid_pwc_tasks_metadata_df.merge(repo_tasks_with_counts, on="task")
+
+pwc_tasks_metadata_df.columns
+#+END_SRC
+
+#+RESULTS:
+: Index(['area', 'task', 'task_description', 'doc_count'], dtype='object')
+
+**** Querying with descriptions
+
+#+BEGIN_SRC python :session querying.org  :exports both :async
+code_description_evaluation_df = code_evaluator.get_evaluation_df(code_evaluator.prepare_queries_df(pwc_tasks_metadata_df, query_field="task_description", query_label_field="task"))
 #+END_SRC
 
 #+RESULTS:
 
 #+BEGIN_SRC python :session querying.org  :exports both :async
-code_evaluation_df.drop(columns=["tasks"]).mean()
+code_description_evaluation_df[["hits@10", "accuracy@10"]].mean()
 #+END_SRC
 
 #+RESULTS:
-: hits@10        4.62
-: accuracy@10    0.90
+: hits@10        0.875458
+: accuracy@10    0.415751
+: dtype: float64
+
+#+BEGIN_SRC python :session querying.org  :exports both
+readme_description_evaluation_df = readme_evaluator.get_evaluation_df(readme_evaluator.prepare_queries_df(pwc_tasks_metadata_df, query_field="task_description", query_label_field="task"))
+#+END_SRC
+
+
+**** Descriptions and worst tasks
+How many worst performing tasks have descriptions?
+
+#+BEGIN_SRC python :session querying.org  :exports both
+pwc_tasks_metadata_df["task"].isin(code_worst_tasks["query"]).mean()
+#+END_SRC
+
+#+RESULTS:
+: 0.3404255319148936
+
+#+BEGIN_SRC python :session querying.org  :exports both
+worst_code_tasks_descriptions =pwc_tasks_metadata_df[pwc_tasks_metadata_df["task"].isin(code_worst_tasks["query"])]
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session querying.org  :exports both
+code_description_evaluation_df.merge(worst_code_tasks_descriptions, left_on="query", right_on="task_description")[["accuracy@10", "hits@10"]].mean()
+#+END_SRC
+
+#+RESULTS:
+: accuracy@10    0.216346
+: hits@10        0.384615
 : dtype: float64

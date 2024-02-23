@@ -20,6 +20,7 @@ class SetupIndexConfig(BaseModel):
     index_save_path: Path
     name: str
     checkpoint: Path = Field(default="Intel/ColBERT-NQ")
+    batch_size: int
     gpus: int = Field(default=1)
     ranks: int = Field(default=1)
     doc_max_length: int = Field(default=256)

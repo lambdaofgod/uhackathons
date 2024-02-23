@@ -1,7 +1,7 @@
 
 import json
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import fire
 import pandas as pd
@@ -10,6 +10,7 @@ from haystack import Document
 from pydantic import BaseModel
 
 from configs import IndexingConfig
+import logging
 
 
 class IndexConfig(BaseModel):
@@ -40,22 +41,30 @@ class PlaidIndex(BaseModel):
     config: IndexConfig
     store: PLAIDDocumentStore
     collection: pd.DataFrame
+    logging_extra: str
 
     @classmethod
-    def create_index(cls, config):
+    def create_index(cls, config, logging_extra: Optional[str]):
         store = PLAIDDocumentStore(
             index_path=str(config.index_path), collection_path=str(config.collection_path), create=False, gpus=config.gpus, checkpoint_path=config.checkpoint_path)
         collection = pd.read_csv(
             config.collection_path, sep="\t").set_index("title")
-        return cls(config=config, store=store, collection=collection)
+        logging_extra = logging_extra if logging_extra is not None else ""
+        return cls(config=config, store=store, collection=collection, logging_extra=logging_extra)
 
     def query(self, query, top_k=10):
         results = self.store.query(query, top_k=top_k)
+        logging.info(
+            f"querying with '{query}' returned {len(results)} results")
         return self.DocUtils.fill_doc_metas(results, set(self.config.additional_metadata_cols), self.collection)
 
     def query_grouped(self, query, group_by, top_k, raw_docs_topk):
         doc_results = self.query(query, raw_docs_topk)
-        return self.DocUtils.doc_results_to_grouped_results([doc.to_dict() for doc in doc_results], group_by, top_k)
+        grouped_results = self.DocUtils.doc_results_to_grouped_results(
+            [doc.to_dict() for doc in doc_results], group_by, top_k, self.logging_extra)
+        logging.info(
+            f"GROUPED querying with '{query}' returned {len(grouped_results)} results")
+        return grouped_results
 
     class DocUtils:
 
@@ -84,14 +93,28 @@ class PlaidIndex(BaseModel):
             return doc
 
         @classmethod
-        def doc_results_to_grouped_results(cls, doc_results, group_by, top_k):
+        def doc_results_to_grouped_results(cls, doc_results, group_by, top_k, logging_extra):
             doc_result_dicts = [cls._doc_with_grouping_field(
                 doc, group_by) for doc in doc_results]
             doc_results_df = pd.DataFrame.from_records(doc_result_dicts)
-            grouped_results_df = doc_results_df.drop_duplicates(subset=[
-                                                                group_by])
-            results = grouped_results_df.iloc[:top_k].to_dict(orient="records")
+            best_group_results_idxs = doc_results_df.groupby(group_by)[
+                "score"].idxmax()
+
+            best_group_results_df = doc_results_df.loc[best_group_results_idxs].sort_values(
+                "score", ascending=False)
+            results = best_group_results_df.iloc[:top_k].to_dict(
+                orient="records")
+            cls.log_group_info(logging_extra, doc_results_df,
+                               best_group_results_idxs, group_by)
             return results
+
+        @classmethod
+        def log_group_info(cls, logging_extra, doc_results_df, best_group_results_idxs, group_by):
+            if "grouped" in logging_extra:
+                logging.info(
+                    f"found {len(best_group_results_idxs)} different values for '{group_by}' field")
+                logging.info(
+                    f"there are on average {doc_results_df[group_by].value_counts().mean()} documents per each value from '{group_by}' field")
 
         @classmethod
         def _doc_with_grouping_field(cls, doc_dict, group_by):
