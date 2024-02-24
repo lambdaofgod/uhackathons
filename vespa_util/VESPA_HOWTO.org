@@ -56,29 +56,59 @@ vespa query "select * from music where album contains 'head'" \
 
 https://blog.vespa.ai/turbocharge-rag-with-langchain-and-vespa-streaming-mode/
 
-I made an app from this in examples/pdf_rag
+Go to examples/vespa_rag
+
+There are two app_types: `colbert` and `semantic`
+
+poetry run python vespa_app.py export_app $APP_TYPE $APP_TYPE
+
+poetry run python vespa_app.py deploy_to_docker $APP_TYPE $APP_TYPE
+
+poetry run python vespa_app.py add_documents_from_csv vespa_app/files/small_python_code_doc_coll.tsv -a $APP_TYPE
+
+** Querying
 
 #+BEGIN_SRC python :session VESPA_HOWTO.org  :exports both
 from vespa.io import VespaQueryResponse
 import json
 from vespa.application import Vespa
 
+query = "object detection"
+
+topk = 25
 app = Vespa(url="http://localhost", port=8080)
 response:VespaQueryResponse = app.query(
-    yql="select id,title,page,chunks from pdfrag where userQuery() or ({targetHits:10}nearestNeighbor(embedding,q))",
+    yql=f"select id,name,chunk,metadata from colbert where userQuery() or ({{targetHits:{topk*4}}}nearestNeighbor(embedding,q)) limit {topk}",
     groupname="admin",
-    ranking="hybrid",
-    query="why is colbert effective?",
+    ranking="colbert",
+    query=query,
     body={
         "presentation.format.tensors": "short-value",
-        "input.query(q)": "embed(e5, \"why is colbert effective?\")",
+        "input.query(q)": f"embed(e5, \"{query}\")",
+        "input.query(qt)": f"embed(colbert, \"{query}\")",
     }
 )
 assert(response.is_successful())
-print(json.dumps(response.hits[0], indent=2))
+results = json.dumps(response.hits[0], indent=2)
+response.hits[0]["fields"]["metadata"]
 #+END_SRC
 
 #+RESULTS:
+| repo_name | : | DetectionTeamUCAS/FCOS_GluonCV | id | : | 56 | tasks | : | [semantic segmentation, pedestrian detection, object detection] |
+
+#+BEGIN_SRC python :session VESPA_HOWTO.org  :exports both
+len(response.hits)
+#+END_SRC
+
+#+RESULTS:
+: 25
+
+#+BEGIN_SRC python :session VESPA_HOWTO.org  :exports both
+[hit["fields"]["metadata"]["repo_name"] for hit in response.hits]
+#+END_SRC
+
+#+RESULTS:
+| DetectionTeamUCAS/FCOS_GluonCV | DetectionTeamUCAS/FCOS_GluonCV | linspace100/AI_traffic_police | TencentYoutuResearch/PedestrianDetection-NohNMS | TencentYoutuResearch/PedestrianDetection-NohNMS | linspace100/AI_traffic_police | xytpai/DetX-FCOS | linspace100/AI_traffic_police | xytpai/DetX-FCOS | linspace100/AI_traffic_police | TencentYoutuResearch/PedestrianDetection-NohNMS | kinglintianxia/KittiSeg | xytpai/DetX-FCOS | facebookresearch/habitat-sim | xytpai/DetX-FCOS | wangguojun2018/CenterNet3d | lijx10/USIP | lijx10/USIP | skumar9876/FCRL | lijx10/USIP | lijx10/USIP | CSAILVision/semantic-segmentation-pytorch | cfzd/Ultra-Fast-Lane-Detection | bethgelab/notorious_difficulty_of_comparing_human_and_machine_perception | arbellea/DeepCellSeg |
 
 * Troubleshooting
 
@@ -90,3 +120,22 @@ https://pyvespa.readthedocs.io/en/latest/application-packages.html#Deploy-from-m
 
 
 * Configuring app in Python
+
+#+BEGIN_SRC python :session VESPA_HOWTO.org  :exports both
+from langchain.retrievers.vespa_retriever import VespaRetriever
+
+vespa_query_body = {
+    "yql": "select id,title,page,chunks from csvrag where userQuery() or ({targetHits:10}nearestNeighbor(embedding,q))",
+    "hits": 5,
+    "ranking": "hybrid",
+    "locale": "en-us",
+    "body": {
+        "presentation.format.tensors": "short-value",
+        "input.query(q)": "embed(e5, \"why is colbert effective?\")",
+    }
+}
+vespa_content_field = "content"
+retriever = VespaRetriever(app, vespa_query_body, "content")
+#+END_SRC
+
+#+RESULTS:
