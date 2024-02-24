@@ -1,13 +1,13 @@
 ### A Pluto.jl notebook ###
-# v0.19.9
+# v0.19.29
 
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 5a980518-667b-11ee-1701-8b9b21975813
+# ╔═╡ 4dc336fd-7676-4f1c-9772-a74cacea1571
 begin
 	using Pkg
-	Pkg.activate("../neucgraph/")
+	Pkg.activate("../Neucgraph")
 	using DataFrames
 	using Distributions
 	using LinearAlgebra
@@ -18,13 +18,20 @@ begin
 	using InMemoryDatasets
 	using LightGraphs # graph library
 	using SimpleWeightedGraphs
-	
-	using PyPlot
+	using Statistics
+
+	using MarketTechnicals
+	using Printf
 	using StatisticalGraphics
 	using Plotly
 	using PlutoPlotly
-	
 	using ManifoldLearning
+
+	using Manifolds
+	using Manopt
+	using Random
+	using Plots
+	using Zygote
 	ENV["LD_LIBRARY_PATH"] = ""
 end
 
@@ -35,17 +42,13 @@ begin
 	records = JSON.parse(read(path, String));
 end
 
-# ╔═╡ 3cb49c9e-793a-4bc7-a6f6-6fddc72f0ae4
-begin
-	using Manifolds
-	using Manopt
-	using Random
-	using Plots
-	Random.seed!(42)
-end
+# ╔═╡ deafca23-adc3-4e1a-84d6-7cc96e25f838
+using ForwardDiff
 
-# ╔═╡ d2b9ea9c-66e4-41cd-a961-216320c18aec
-Manopt
+# ╔═╡ 4e33f833-4457-4ab5-b4d8-f4dd3902d740
+md"""
+Load graph records in JSON
+"""
 
 # ╔═╡ c24341de-1bbc-4d2b-bae8-c19ebbc891af
 @kwdef struct OrgLink
@@ -142,6 +145,9 @@ end
 # ╔═╡ 2f3a5bee-b904-468c-a4b5-0fcb83ad1a02
 labeled_graph = filter_small_connected_components(raw_labeled_graph, 25)
 
+# ╔═╡ 78e48617-71a5-4a8f-a381-7c0ce68e2752
+
+
 # ╔═╡ 79c84dfb-464a-49ab-a2a5-51972f94aebe
 md"""
 ## Now the hyperbolic stuff
@@ -232,14 +238,19 @@ end
 (typeof(M_data), size(M_data))
 
 # ╔═╡ 87dfa350-b8dd-43aa-87a5-b40bc35b0bd3
+# ╠═╡ disabled = true
+#=╠═╡
 graph_dists = [
-	[0, 2, 1, 2],
-	[2, 0, 2, 1],
-	[1, 2, 0, 2],
-	[2, 1, 2, 0]
+	[0, 2, 1, 2, 2],
+	[2, 0, 2, 1, 2],
+	[1, 2, 0, 2, 2],
+	[2, 1, 2, 0, 1],
+	[2, 2, 2, 1, 0]
 ]
+  ╠═╡ =#
 
 # ╔═╡ b16fa860-9add-4e25-b244-415e3570a13d
+#=╠═╡
 begin
 	indices = 1:size(graph_dists)[1] |> collect
 	neighbor_indices = [
@@ -251,86 +262,696 @@ begin
 		for ds in graph_dists
 	]
 end
+  ╠═╡ =#
 
 # ╔═╡ abff6230-0feb-4898-88a2-0f06e96ccae7
+#=╠═╡
 begin
 	positive_indices = neighbor_indices[1]
 	negative_indices = sample(all_negative_indices[1], 2, replace=false)
 end
+  ╠═╡ =#
 
 # ╔═╡ 0b928607-df5c-44c5-9b8a-69c06d726de7
-X = rand(M, 4)
-
-# ╔═╡ f18d4056-de9a-4187-bff3-ed02df186f72
-function embedding_dist(M, point, other)
-	distance.(Ref(M), Ref(point), other)
-end
+X = rand(M, 5) * 0.1
 
 # ╔═╡ 46a9e180-832a-424c-a5c9-324e48e13f9b
 anchor_indices = [1]
 
 # ╔═╡ 87a63fc4-2aa5-468c-b6af-8523264afa4c
+# ╠═╡ disabled = true
+#=╠═╡
+x :: Integer = 1
+  ╠═╡ =#
 
+# ╔═╡ 322680da-dcbc-41a8-83d8-f9fe50978072
+struct GraphNeighborhoodIndices
+	neighbor_indices:: Vector{Vector{Int64}}
+	nonneighbor_indices:: Vector{Vector{Int64}} 
+end
+
+# ╔═╡ e112ce7a-de69-410d-aacc-40e5941770a8
+begin
+	struct NodeBatch
+		point_indices:: Vector{Int64}
+		positive_indices:: Vector{Vector{Int64}}
+		negative_indices:: Vector{Vector{Int64}}
+	end
+	
+		
+	function sample_node_batch(graph_indices:: GraphNeighborhoodIndices, batch_size=2)
+		n = size(graph_indices.neighbor_indices)[1]
+		point_indices = sample(1:n, batch_size)
+		NodeBatch(
+			point_indices,
+			graph_indices.neighbor_indices[point_indices],
+			graph_indices.nonneighbor_indices[point_indices],
+		)
+	end
+end
+
+# ╔═╡ 69761f12-8442-4be3-adc0-5a891ef7ded7
+function sample_node_batch(labeled_graph:: LabeledGraph, batch_size=2, n_negative=10)
+	n_nodes = length(labeled_graph.node_to_index)
+	point_indices = sample(1:n_nodes, batch_size)
+	positive_indices = [
+		labeled_graph.graph.fadjlist[pi]
+		for pi in point_indices
+	]
+	negative_indices = [
+		[
+			neg_index
+			for neg_index in sample(1:n_nodes, n_negative)
+			if !(neg_index in positive_indices[i]) && neg_index != pi
+		]
+		for (i, pi) in enumerate(point_indices)
+	]
+	NodeBatch(
+		point_indices,
+		positive_indices,
+		negative_indices
+	)
+end
+
+# ╔═╡ 3a49dcd9-201a-4f79-a0f3-0f0d410da7e0
+function embedding_dist(M, point, other)
+	distance.(Ref(M), Ref(point), other)
+end
+
+# ╔═╡ 83dfc090-17d6-4848-bad1-44c967f2b0cc
+md"""
+## Set up the graph
+"""
+
+# ╔═╡ 0636f25d-9b70-4e6a-a5c6-f24b5877b696
+#=╠═╡
+begin
+	example_graph = GraphNeighborhoodIndices(neighbor_indices, all_negative_indices)
+	star_graph_indices = GraphNeighborhoodIndices(
+		# 1s node is connected to everything
+		[
+			[2,3,4],
+			[1],
+			[1],
+			[1],
+			[4]
+		],
+		[
+			[],
+			[3,4],
+			[2,4],
+			[2,3,5]
+		]
+	)
+	node_batch_sampled = sample_node_batch(example_graph)
+	node_batch = NodeBatch([1,2], [neighbor_indices[i] for i in [1,2]], [all_negative_indices[i] for i in [1,2]])
+
+	star_graph_node_batch = NodeBatch([1,2,3,4, 5], star_graph_indices.neighbor_indices, star_graph_indices.nonneighbor_indices)
+end
+  ╠═╡ =#
+
+# ╔═╡ d938520d-d832-48cb-bf67-766f25610dcd
+
+
+# ╔═╡ 7866d9a6-8432-44f9-a6cd-6c73a435c678
+
+
+# ╔═╡ 240542ec-bcc2-420a-87f2-82c164c55924
+md"""
+
+### Loss function
+
+Loss per neighborhood of node $i$: pos are positive indices, $\mathcal{N}$ is the whole sampled neighborhood (positive + negative)
+
+$P(X, i, pos, \mathcal{N}) = \frac{
+	\sum_{p \in pos}e^{-d(X_i, X_{p})}
+	}{
+	\sum_{n \in \mathcal{N}}e^{-d(X_i, X_{n})}
+	}$
+
+$$L(X, i, pos, \mathcal{N}) = -log\ P(X, i, pos, \mathcal{N}) = $$
+
+$$= - log(\sum_{p \in pos}e^{-d(X_i, X_{p})}) + log(\sum_{n \in \mathcal{N}}e^{-d(X_i, X_{n})})$$
+"""
 
 # ╔═╡ 70a7e25f-f8ac-4a0b-bc57-7efa15f92a16
-function embedding_loss(M, point, X, positive_indices, negative_indices)
-	negative_loss = logsumexp(embedding_dist(M, point, X[negative_indices]))
-	positive_loss = sum(embedding_dist(M, point, X[positive_indices]))
+function embedding_loss(M, X, point_idx:: Integer, point_positive_indices, point_negative_indices)
+	all_indices = [point_positive_indices; point_negative_indices]
+	negative_loss = logsumexp(-embedding_dist(M, X[point_idx], X[all_indices]) .+ 1e-6)
+	positive_loss = -logsumexp(-embedding_dist(M, X[point_idx], X[point_positive_indices]) .+ 1e-6)
 	positive_loss + negative_loss
 end
 
-# ╔═╡ 4157355d-eabe-4386-9e29-7e79b15960b8
+# ╔═╡ eca17896-76ea-4017-b8a3-bfe1847b7047
 begin
-	embedding_loss(M, X[1], X, positive_indices, negative_indices)
+	function embedding_loss(M, X, node_batch:: NodeBatch)
+		sum(embedding_losses(M, X, node_batch))
+	end
+	
+	function embedding_losses(M, X, node_batch:: NodeBatch)
+		[
+			embedding_loss(M, X, p_idx, pos_idxs, neg_idxs)
+			for (p_idx, pos_idxs, neg_idxs) in zip(node_batch.point_indices, node_batch.positive_indices, node_batch.negative_indices)
+		]
+	end
 end
 
-# ╔═╡ 8b845a7c-28f5-453b-8857-7ab3d5d197ce
-embedding_loss.(Ref(M), X, Ref(X), neighbor_indices, all_negative_indices)
+# ╔═╡ f2a914e2-226a-453a-a409-f19b84e38758
+#=╠═╡
+begin
+	println("single loss: ", round(embedding_loss(M, X, 1, neighbor_indices[1], all_negative_indices[1]), digits=2))
 
-# ╔═╡ 014f62ab-ecf8-43fc-8b17-fb1099a3cded
+	println("batch loss for sample batch: ", round(embedding_loss(M, X, node_batch), digits=2))
 
+	println("batch loss for star graph batch: ", round(embedding_loss(M, X, star_graph_node_batch), digits=2))
+	
+end
+  ╠═╡ =#
+
+# ╔═╡ 984dfc8c-62d3-436f-a501-ab927cf7cec8
+function fill_nothings(X, l)
+	if X === nothing
+		zeros(l)
+	else
+		replace(X, NaN=>0)
+	end
+end
+
+# ╔═╡ 43fce4a1-c817-4d7b-a08c-eee3f22e1f3b
+function embedding_loss_grad_euc(M, X, node_batch:: NodeBatch)
+	loss(x) = embedding_loss(M, x, node_batch)
+	grad_result = Zygote.gradient(loss, X)
+	grad_result[1]
+end
+
+# ╔═╡ 89a7f2dd-3ed0-40cd-8d4a-609b707ce348
+#=╠═╡
+embedding_loss_grad_euc(M, X, node_batch)
+  ╠═╡ =#
 
 # ╔═╡ 472d15f5-f4e2-454a-8dd9-aff21221d0c9
-function embedding_loss_grad(M, point, X, positive_indices, negative_indices)
-	Manopt.get_gradients(Ref(M), params -> embedding_loss(M, point, params, positive_indices, negative_indices), X)
+function embedding_loss_grad(M, X, node_batch:: NodeBatch)
+	l = size(X[1][1])
+	egrad = fill_nothings.(embedding_loss_grad_euc(M, X, node_batch), Ref(l))
+	project.(Ref(M), X, egrad)
 end
 
-# ╔═╡ dfd85b48-57f4-4852-8173-ac2f3fac42cf
+
+# ╔═╡ 5977755b-9c29-404d-8723-1c6f1b634068
+#=╠═╡
+embedding_loss_grad(M, X, node_batch)
+  ╠═╡ =#
+
+# ╔═╡ f4d362b9-9552-44ec-b95b-6097e929681d
+#=╠═╡
 begin
-	#p0 =  [[1.0,0.0], [0.0,1.0], [0.0,0.0]] #[1.0 0.0; 0.0 1.0; 0.0 0.0; 0.0 0.0; 0.0 0.0]
-	#p_start = p0 .- 1.0
-	p_target = [1.0 0.0; 0.0 1.0; 0.0 0.0; 0.0 0.0; 0.0 0.0]
-	p0 = p_target .- 1.0
+	local alpha = 1e-3
+	sample_riemmanian_grad = embedding_loss_grad_euc(M, X, node_batch)
+	retract.(Ref(M), X, - alpha * sample_riemmanian_grad)
+end
+  ╠═╡ =#
+
+# ╔═╡ 56133133-ae05-494a-8394-58250bfb92c3
+md"""
+
+# Riemannian gradient descent
+
+"""
+
+# ╔═╡ 64998d98-4f51-4bbd-9e12-4a5e99e677ea
+sample(1:5,2)
+
+# ╔═╡ 01030291-8ffa-48da-a066-2abd243eadbc
+function embedding_update_step(M, X, node_batch:: NodeBatch, alpha=1e-3)
+	# get riemannian gradient
+	rgrad = embedding_loss_grad(M, X, node_batch)
+	#=
+	update step: X' = retract_X(- alpha grad f(X))
+	corresponds to Euclidean X' = X - alpha grad f(X) 
+	=#
+	
+	retract.(Ref(M), X, - alpha * rgrad)
 end
 
-# ╔═╡ fc6550b0-bb75-4fcd-a015-f67e71e93dfa
-p_target
-
-# ╔═╡ 4c2908da-e779-45a6-9863-e588ab4e06b0
-p0
-
-# ╔═╡ 41683763-7d32-4213-857b-45d0734f3cd9
-
-
-# ╔═╡ b45cf641-a333-4e75-8e67-1ce58b36e26d
+# ╔═╡ 5c1e9aad-db93-4d9e-9e1e-382b0d5058d4
 begin
-	MEuc = Euclidean(2)
+	struct OptimizationStepState
+		inputs
+		egrad
+		egrad_filled
+		rgrad
+		X_next
+		losses
+	end
+	
+	function embedding_update_step(M, X, node_batch, alpha, verbose=true)
 
-	foo(M, p) = distance(MEuc, p, p_target)
-	foo_vect(M, p) = sum(distance.(Ref(MEuc), eachrow(p), eachrow(p_target)))
-	grad_foo(M, p) = grad_distance(M, p, p_target)
-	grad_foo_vect(M, p) = grad_distance.(Ref(M), eachrow(p), eachrow(p_target))
-
-	grad_foo(MEuc, p0)
-	#get_gradient(MEuc, foo, p)
-	#(foo(MEuc, p0 .+ 1), sum(foo_vect(MEuc, p0 .+ 1)))
+		losses = embedding_losses(M, X, node_batch)
+		egrad = embedding_loss_grad_euc(M, X, node_batch)
+		l = size(X[1])[1]
+		egrad_filled = fill_nothings.(egrad, Ref(l))
+		rgrad = project.(Ref(M), X, egrad_filled)
+		X_next = retract.(Ref(M), X, - alpha * rgrad)
+		OptimizationStepState(
+			node_batch,
+			egrad,
+			egrad_filled, 
+			rgrad,
+			X_next,
+			losses
+		)
+	end
 end
+
+# ╔═╡ 1f9a422e-026d-4686-b862-7e28a423b141
+#=╠═╡
+begin
+	α = 1e-3
+	iters = 1000
+	global X_updated = X
+	for _ in 1:iters
+		global X_updated = embedding_update_step(M, X_updated, star_graph_node_batch, α)
+	end
+
+	["original loss"=> embedding_loss(M, X, star_graph_node_batch), "loss after step" => embedding_loss(M, X_updated, star_graph_node_batch)]
+end
+  ╠═╡ =#
+
+# ╔═╡ ed0c20ed-d136-4e84-b734-9236cdd82254
+function hyperboloid_to_poincare(X)
+	l = size(X)[1]
+	X[1:(l-1)] / (1 + X[l])
+end
+
+# ╔═╡ 70946a03-7a1d-46b0-83f9-ac37653a088f
+#=╠═╡
+begin
+	X_poincare = reduce(hcat, hyperboloid_to_poincare.(X))'
+	X_updated_poincare = reduce(hcat, hyperboloid_to_poincare.(X_updated))'
+end
+  ╠═╡ =#
+
+# ╔═╡ 6a5f2210-db86-4d39-bfa7-642c8465de0b
+md"""
+
+The displayed embeddings after (red) and before (blue) optimization show that embeddings start to look more like they come from a star graph
+"""
+
+# ╔═╡ 4a1ec5f0-85b0-4e96-ab38-068f21e19df8
+#=╠═╡
+begin
+	Plots.scatter(X_poincare[:,1], X_poincare[:,2], markercolor=:blue)
+	Plots.scatter!(X_updated_poincare[:,1], X_updated_poincare[:,2], markercolor=:red)
+end
+  ╠═╡ =#
+
+# ╔═╡ 1332265a-23b2-496b-bf99-d04b9c57186b
+function pairwise_manifold_dists(M, X)
+	n = size(X)[1]
+	dists = [
+		[
+			distance(M, X[i], X[j])
+			for i in 1:n
+		]
+		for j in 1:n
+	]
+	reduce(hcat, dists)'
+end
+
+# ╔═╡ a3d52860-1528-469d-8427-6d1e4bac0777
+#=╠═╡
+begin
+	manifold_dists_before_optimization = pairwise_manifold_dists(M, X)
+	manifold_dists_after_optimization = pairwise_manifold_dists(M, X_updated)
+	star_graph_dists = [
+		[0, 1, 1, 1, 2],
+		[1, 0, 2, 2, 2],
+		[1, 2, 0, 2, 2],
+		[1, 2, 2, 0, 1],
+		[2, 2, 2, 1, 0]
+	]
+	graph_dists_mat = reduce(hcat, star_graph_dists)'
+end
+  ╠═╡ =#
+
+# ╔═╡ e90e444c-edb6-4866-8d60-f99b58a81443
+function matrix_kendall(X, Y)
+	n = size(X)[1]
+	corr = 0
+	for i in 1:n
+		corr += StatsBase.corkendall(sortperm(X[1,:]), sortperm(Y[1,:]))
+	end
+	corr / n
+end
+
+# ╔═╡ 06036fe1-aad3-4611-8597-63f9ed983336
+md"""
+### Comparing the distances
+
+We also see that the Kendall's tau rank correlation between distances is better for embeddings after optimization
+
+"""
+
+# ╔═╡ e191afca-a696-422b-a2c2-3fbc2b93a46c
+#=╠═╡
+matrix_kendall(graph_dists_mat, manifold_dists_after_optimization)
+  ╠═╡ =#
+
+# ╔═╡ 3847fcf9-3a09-4b07-a06a-20f550b85013
+#=╠═╡
+matrix_kendall(graph_dists_mat, manifold_dists_before_optimization)
+  ╠═╡ =#
+
+# ╔═╡ bd9a5cfc-0662-453e-aa95-5008384d4a78
+md"""
+
+## Running on LabeledGraph
+
+"""
 
 # ╔═╡ dc8d6982-f29e-43f0-b839-b9f803733339
+begin
+	mutable struct GraphEmbeddingTrainer
+		samplable_graph # something that can be used to sample NodeBatch
+		embeddings
+		M
+		batch_size
+		n_negative
+		alpha
+		log
+	end
+	
+	function init_trainer(labeled_graph:: LabeledGraph; M=Hyperbolic(2), batch_size=5, n_negative=20, alpha=1e-4, init_embeddings_scale=0.1)
+		embeddings = rand(M, length(labeled_graph.node_to_index)) * init_embeddings_scale
+	
+		GraphEmbeddingTrainer(
+			labeled_graph,
+			embeddings,
+			M,
+			batch_size,
+			n_negative,
+			alpha,
+			[]
+		)
+	end
 
+	function train(trainer:: GraphEmbeddingTrainer, n_steps; verbose=false)
+		step_state = Nothing
+		for _ in 1:n_steps
+			step_state = train_step(trainer)
+			if verbose
+				debug_print_step_state(step_state)
+			end
+			if !is_step_valid(step_state)
+				println("state invalid")
+				return step_state
+			end
+			trainer.embeddings = step_state.X_next
+			append!(trainer.log, Statistics.mean(step_state.losses))
+		end
+
+		step_state
+	end
+
+	function is_valid_number(value)
+		isa(value, Number) && !isnan(value)
+	end
+	
+	function is_valid_numeric_vector(row)
+		if !isa(row, Vector)
+				return false
+		end
+		for value in row
+			if !is_valid_number(value)
+				return false
+			end
+		end
+		return true
+	end
+	
+	function is_valid_numeric(a)
+		for row in a
+			if !is_valid_numeric_vector(row)
+				return false
+			end
+		end
+		return true
+	end
+
+	function mean_nonzero_norm(vs)
+		norms = norm.(vs)
+		nonzero_norms = norms .> 1e-6
+		Statistics.mean(norms[nonzero_norms])
+	end
+
+	function debug_print_step_state(step_state)
+		println("embeddings valid: ", is_valid_numeric(step_state.X_next))
+		println("egrad valid: ", is_valid_numeric(step_state.egrad_filled))
+		println("rgrad valid: ", is_valid_numeric(step_state.rgrad))
+		println("embeddings mean norm: ", mean_nonzero_norm(step_state.X_next))
+		println("nonzero egrad mean norm: ", mean_nonzero_norm(step_state.egrad_filled))
+		println("nonzero rgrad mean norm: ", mean_nonzero_norm(step_state.rgrad))
+		println("losses: ", step_state.losses)
+		println("loss: ", Statistics.mean(step_state.losses))
+	end
+
+	function is_step_valid(step_state)
+		grads_valid = all([
+			is_valid_numeric(field)
+			for field in [step_state.egrad_filled, step_state.rgrad]
+		])
+		is_valid_numeric_vector(step_state.losses) && grads_valid && is_valid_numeric(step_state.X_next)
+	end
+	
+	function train_verbose(trainer:: GraphEmbeddingTrainer, n_steps)
+		step_state = Nothing
+		println("TRAINER embeddings valid: ", is_valid_numeric(trainer.embeddings))
+		for _ in 1:n_steps
+			step_state = train_step(trainer)
+			debug_print_step_state(step_state)
+			if !is_step_valid(step_state)
+				println("state invalid")
+				return step_state
+			end
+			println("TRAINER embeddings valid: ", is_valid_numeric(trainer.embeddings))
+			trainer.embeddings = step_state.X_next
+			append!(trainer.log, Statistics.mean(step_state.losses))
+		end
+
+		step_state
+	end
+
+	function train_step(trainer)
+		node_batch = sample_node_batch(trainer.samplable_graph, trainer.batch_size, trainer.n_negative)
+		opt_state = embedding_update_step(trainer.M, trainer.embeddings, node_batch, trainer.alpha, true)
+		opt_state
+	end
+end
+
+# ╔═╡ 79cef6a7-bc77-4c36-a2cf-dfc09ee89123
+begin
+	d = Dict([])
+	
+	d["a"] = 5
+end
+
+# ╔═╡ d989054b-ced6-44c5-a7f4-2a1b1c613f5b
+begin
+	vs = [
+	
+		[1, 2],
+		[0, 0]
+	]
+	mean_nonzero_norm(vs)
+	true && false
+end
 
 # ╔═╡ bb08bb32-e0ec-40fa-8fe4-b399286383a1
+trainer = init_trainer(labeled_graph, batch_size=5, alpha=1e-4, init_embeddings_scale=0.5)
 
+# ╔═╡ dac6400e-e9b5-437a-8ffa-8568f935cc30
+labeled_graph_dists = floyd_warshall_shortest_paths(labeled_graph.graph).dists;
+
+# ╔═╡ a6efecc3-ca20-4039-8df0-0c41aa9be5ab
+matrix_kendall(pairwise_manifold_dists(trainer.M, trainer.embeddings), labeled_graph_dists)
+
+# ╔═╡ ace438dd-9cc7-4042-8f13-928fe1516343
+opt_step_state = train(trainer, 100000)
+
+# ╔═╡ d32b70e6-a61c-41e5-a368-973f6b291002
+Plots.plot(MarketTechnicals.sma(trainer.log, 250))
+
+# ╔═╡ 87e0a87a-b1a2-4dc4-b974-6d24ef2a5912
+length(trainer.log)
+
+# ╔═╡ db0da446-b913-41a8-b797-0d05e3c29e33
+begin
+	embeddings_dists = pairwise_manifold_dists(trainer.M, trainer.embeddings)
+	matrix_kendall(embeddings_dists, labeled_graph_dists)
+end
+
+# ╔═╡ 72c39cc7-7ebc-427b-a37d-e09f8fda641b
+begin
+	embeddings_poincare = hyperboloid_to_poincare.(trainer.embeddings)
+	embeddings_poincare_matrix = reduce(hcat, embeddings_poincare)'
+	NaN
+end
+
+# ╔═╡ 3faaf7a1-8a11-4817-96b7-b423ab80e969
+Plots.scatter(embeddings_poincare_matrix[:,1], embeddings_poincare_matrix[:,2])
+
+# ╔═╡ 09de7780-41d6-400f-bcdf-e0c7329f9bd9
+i = 2
+
+# ╔═╡ ed62adac-8099-46f8-9ca4-2872e8632028
+findall(x -> x < quantile(embeddings_dists[i,:], 0.05), embeddings_dists[i,:])
+
+# ╔═╡ 985f0999-77dd-4ebf-afd7-3d008b72044e
+findall(x -> x < 2, labeled_graph_dists[i,:])
+
+# ╔═╡ ba75aaa4-cecf-4ccc-a9d2-f460bb2ab809
+# ╠═╡ disabled = true
+#=╠═╡
+labeled_graph_dists = floyd_warshall_shortest_paths(labeled_graph.graph).dists;
+  ╠═╡ =#
+
+# ╔═╡ 2cbf0057-4064-4b21-9bc6-a72ae73b4381
+matrix_kendall(embedding_dists, labeled_graph_dists)
+
+# ╔═╡ 192e2d46-df17-4100-b7dd-510f1343da55
+# ╠═╡ disabled = true
+#=╠═╡
+
+  ╠═╡ =#
+
+# ╔═╡ 3f9131a4-204e-419c-a91a-b7b12dcb0805
+#=╠═╡
+begin
+	invalid_row_idx= [
+		ri
+		for (ri, row) in enumerate(opt_step_state.egrad_filled)
+		if any(isnan.(row))
+	][1]
+	
+	invalid_row_batch_idx = [i for (i, ri) in enumerate(opt_step_state.inputs.point_indices) if ri == invalid_row_idx][1]
+
+	invalid_positive_indices = opt_step_state.inputs.positive_indices[invalid_row_batch_idx]
+	invalid_negative_indices = opt_step_state.inputs.negative_indices[invalid_row_batch_idx]
+	invalid_batch = NodeBatch([invalid_row_idx], [invalid_positive_indices], [invalid_negative_indices])
+end
+  ╠═╡ =#
+
+# ╔═╡ 1fa62b8f-ae94-4239-9418-3ba7b0b397be
+#=╠═╡
+invalid_batch_grads = embedding_loss_grad_euc(trainer.M, trainer.embeddings, invalid_batch)
+  ╠═╡ =#
+
+# ╔═╡ 6996ebbd-cf78-4ca2-a7b5-8d57d57effd6
+
+
+# ╔═╡ 52bdd3c3-eb3b-4d3d-b62e-841325fd7d74
+#=╠═╡
+invalid_batch_grads[invalid_row_idx]
+  ╠═╡ =#
+
+# ╔═╡ c9d21b80-386d-4353-9c5d-d6b2c6ee80dc
+#=╠═╡
+invalid_batch_all_indices = [[invalid_row_idx]; invalid_positive_indices; invalid_negative_indices ]
+  ╠═╡ =#
+
+# ╔═╡ 09c437ac-8692-4ba4-94b8-7b3b80282186
+#=╠═╡
+pairwise_manifold_dists(trainer.M, trainer.embeddings[invalid_batch_all_indices])
+  ╠═╡ =#
+
+# ╔═╡ acdabe68-e436-46cd-94e7-c2b7745dfcad
+#=╠═╡
+f_pos(embs) = logsumexp(-embedding_dist(trainer.M, embs[invalid_row_idx], embs[invalid_positive_indices]))
+  ╠═╡ =#
+
+# ╔═╡ 9aeaae7d-ba26-454d-aa52-5bb5c496e1f4
+#=╠═╡
+f_neg(embs) = logsumexp(-embedding_dist(trainer.M, embs[invalid_row_idx], embs[invalid_negative_indices]))
+  ╠═╡ =#
+
+# ╔═╡ 3bc638ce-d30d-48bb-84c3-8d0416afe22c
+#=╠═╡
+is_valid_numeric(fill_nothings.(ForwardDiff.gradient(f_neg, trainer.embeddings)[1], 3))
+  ╠═╡ =#
+
+# ╔═╡ c9ae6ed2-22c0-4903-8438-9e1b5bd110d2
+#=╠═╡
+is_valid_numeric(fill_nothings.(Zygote.gradient(f_pos, trainer.embeddings)[1], 3))
+  ╠═╡ =#
+
+# ╔═╡ 0d9b90e0-027a-4b00-9806-0f7545c78bc5
+#=╠═╡
+begin
+	invalid_idx = 482
+	invalid_pos_indices = opt_step_state.inputs.positive_indices[5]
+	invalid_neg_indices = opt_step_state.inputs.negative_indices[5]
+end
+  ╠═╡ =#
+
+# ╔═╡ d59a4d24-e7fe-41a4-b5d4-d7025c39a1ed
+#=╠═╡
+for (i, ps, ns) in zip(batch.point_indices, batch.positive_indices, batch.negative_indices)
+	println(i)
+	nb = NodeBatch([i], [ps], [ns])
+	#embedding_loss_grad(trainer.M, trainer.embeddings, )
+	global egrad = embedding_loss_grad_euc(trainer.M, trainer.embeddings, node_batch)
+	project.(Ref(trainer.M), trainer.embeddings, egrad)
+	egrad
+end
+  ╠═╡ =#
+
+# ╔═╡ bdba719c-e7bc-4bd1-9346-fe9a5a25ba9a
+begin
+	g(x, i) = x[i]^2
+	
+	Zygote.gradient(x -> g(x,1), [1, 0])
+end
+
+# ╔═╡ 0fe61a07-1d29-4dd5-afe1-e83d891cd813
+[length(ps) for ps in batch.positive_indices]
+
+# ╔═╡ abce3855-246b-49e5-9268-3c6bd03dd9d8
+[length(ns) for ns in batch.negative_indices]
+
+# ╔═╡ 7c413a2b-d030-4afa-9f47-baf6baf4a563
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+
+	alpha_trainer = 1e-3
+	trainer_iters = 1000
+	original_embs = copy(trainer.embeddings)
+	embs = trainer.embeddings
+	
+	println("single loss: ", round(embedding_loss(trainer.M, embs, batch.point_indices[1], batch.positive_indices[1], batch.negative_indices[1]), digits=2))
+	
+	for _ in 1:iters
+		embs = embedding_update_step(trainer.M, embs, batch, alpha_trainer)
+	end
+
+	["original loss"=> embedding_loss(trainer.M, original_embs, batch), "loss after step" => embedding_loss(trainer.M, trainer.embeddings, batch)]
+	
+end
+  ╠═╡ =#
+
+# ╔═╡ 486cf55b-1ed9-4029-88ec-d96c1db645e5
+
+
+# ╔═╡ 573c63a9-9fc0-4272-8db1-2df82b451bb2
+batch
+
+# ╔═╡ 96acfdfe-68bd-412e-b386-8dab1b31a4a1
+
+
+# ╔═╡ f32a220c-dd16-4e49-8670-369d93a1d758
+#=╠═╡
+train(trainer)
+  ╠═╡ =#
 
 # ╔═╡ 3615ec49-3777-4856-af60-c54b6306e2f6
 gradient_descent(
@@ -344,7 +965,9 @@ gradient_descent(
 Manopt.get_gradient(MEuc, foo, p0)
 
 # ╔═╡ ace7b3ea-cd31-44b4-aaed-3408df240b78
+#=╠═╡
 embedding_loss_grad(M, X[1], X, neighbor_indices[1], all_negative_indices[1])
+  ╠═╡ =#
 
 # ╔═╡ 63b120ae-a6f1-427b-9c0d-64549dbd3bb5
 
@@ -353,7 +976,9 @@ embedding_loss_grad(M, X[1], X, neighbor_indices[1], all_negative_indices[1])
 Manopt.gradient_descent(M, embedding_loss_grad., )
 
 # ╔═╡ c0b0d723-276f-4c35-bfaf-8800be082843
+#=╠═╡
 sum(-embedding_dist(M, X[1], X[positive_indices]))
+  ╠═╡ =#
 
 # ╔═╡ af9c21e7-44b0-46a7-bf12-9f40d7fc3da0
 
@@ -506,6 +1131,9 @@ md"""
 2d Lorentz hyperbolic model is embedded in 3d
 """
 
+# ╔═╡ ad4533a9-4682-4387-8875-6de3bfd10bc0
+
+
 # ╔═╡ bea8e470-8266-42c5-b399-38735fbff300
 lorenz_model = Hyperbolic(2)
 
@@ -549,8 +1177,8 @@ data
 
 
 # ╔═╡ Cell order:
-# ╠═5a980518-667b-11ee-1701-8b9b21975813
-# ╠═d2b9ea9c-66e4-41cd-a961-216320c18aec
+# ╠═4dc336fd-7676-4f1c-9772-a74cacea1571
+# ╠═4e33f833-4457-4ab5-b4d8-f4dd3902d740
 # ╠═461df8e8-cb6d-4927-8f31-48b591fbc194
 # ╠═c24341de-1bbc-4d2b-bae8-c19ebbc891af
 # ╠═0fb53a68-4a57-4556-bc68-6980f57fbcd9
@@ -560,6 +1188,7 @@ data
 # ╠═0bcadf0d-3e57-436a-840d-3526f7d82fe9
 # ╠═1a02921e-94b0-4dd7-8828-806910392505
 # ╠═2f3a5bee-b904-468c-a4b5-0fcb83ad1a02
+# ╠═78e48617-71a5-4a8f-a381-7c0ce68e2752
 # ╠═79c84dfb-464a-49ab-a2a5-51972f94aebe
 # ╠═00d0c1db-2212-41ee-87c3-cca1b59229ce
 # ╠═9f716477-f681-42d8-adc1-050e19f6da4d
@@ -576,21 +1205,81 @@ data
 # ╠═b16fa860-9add-4e25-b244-415e3570a13d
 # ╠═abff6230-0feb-4898-88a2-0f06e96ccae7
 # ╠═0b928607-df5c-44c5-9b8a-69c06d726de7
-# ╠═f18d4056-de9a-4187-bff3-ed02df186f72
 # ╠═46a9e180-832a-424c-a5c9-324e48e13f9b
 # ╠═87a63fc4-2aa5-468c-b6af-8523264afa4c
+# ╠═322680da-dcbc-41a8-83d8-f9fe50978072
+# ╠═e112ce7a-de69-410d-aacc-40e5941770a8
+# ╠═69761f12-8442-4be3-adc0-5a891ef7ded7
+# ╠═3a49dcd9-201a-4f79-a0f3-0f0d410da7e0
+# ╠═83dfc090-17d6-4848-bad1-44c967f2b0cc
+# ╠═0636f25d-9b70-4e6a-a5c6-f24b5877b696
+# ╠═d938520d-d832-48cb-bf67-766f25610dcd
+# ╠═7866d9a6-8432-44f9-a6cd-6c73a435c678
+# ╠═240542ec-bcc2-420a-87f2-82c164c55924
 # ╠═70a7e25f-f8ac-4a0b-bc57-7efa15f92a16
-# ╠═4157355d-eabe-4386-9e29-7e79b15960b8
-# ╠═8b845a7c-28f5-453b-8857-7ab3d5d197ce
-# ╠═014f62ab-ecf8-43fc-8b17-fb1099a3cded
+# ╠═eca17896-76ea-4017-b8a3-bfe1847b7047
+# ╠═f2a914e2-226a-453a-a409-f19b84e38758
+# ╠═984dfc8c-62d3-436f-a501-ab927cf7cec8
+# ╠═43fce4a1-c817-4d7b-a08c-eee3f22e1f3b
+# ╠═89a7f2dd-3ed0-40cd-8d4a-609b707ce348
 # ╠═472d15f5-f4e2-454a-8dd9-aff21221d0c9
-# ╠═dfd85b48-57f4-4852-8173-ac2f3fac42cf
-# ╠═fc6550b0-bb75-4fcd-a015-f67e71e93dfa
-# ╠═4c2908da-e779-45a6-9863-e588ab4e06b0
-# ╠═41683763-7d32-4213-857b-45d0734f3cd9
-# ╠═b45cf641-a333-4e75-8e67-1ce58b36e26d
+# ╠═5977755b-9c29-404d-8723-1c6f1b634068
+# ╠═f4d362b9-9552-44ec-b95b-6097e929681d
+# ╠═56133133-ae05-494a-8394-58250bfb92c3
+# ╠═64998d98-4f51-4bbd-9e12-4a5e99e677ea
+# ╠═01030291-8ffa-48da-a066-2abd243eadbc
+# ╠═5c1e9aad-db93-4d9e-9e1e-382b0d5058d4
+# ╠═1f9a422e-026d-4686-b862-7e28a423b141
+# ╠═ed0c20ed-d136-4e84-b734-9236cdd82254
+# ╠═70946a03-7a1d-46b0-83f9-ac37653a088f
+# ╠═6a5f2210-db86-4d39-bfa7-642c8465de0b
+# ╠═4a1ec5f0-85b0-4e96-ab38-068f21e19df8
+# ╠═1332265a-23b2-496b-bf99-d04b9c57186b
+# ╠═a3d52860-1528-469d-8427-6d1e4bac0777
+# ╠═e90e444c-edb6-4866-8d60-f99b58a81443
+# ╠═06036fe1-aad3-4611-8597-63f9ed983336
+# ╠═e191afca-a696-422b-a2c2-3fbc2b93a46c
+# ╠═3847fcf9-3a09-4b07-a06a-20f550b85013
+# ╠═bd9a5cfc-0662-453e-aa95-5008384d4a78
 # ╠═dc8d6982-f29e-43f0-b839-b9f803733339
+# ╠═79cef6a7-bc77-4c36-a2cf-dfc09ee89123
+# ╠═d989054b-ced6-44c5-a7f4-2a1b1c613f5b
 # ╠═bb08bb32-e0ec-40fa-8fe4-b399286383a1
+# ╠═dac6400e-e9b5-437a-8ffa-8568f935cc30
+# ╠═a6efecc3-ca20-4039-8df0-0c41aa9be5ab
+# ╠═ace438dd-9cc7-4042-8f13-928fe1516343
+# ╠═d32b70e6-a61c-41e5-a368-973f6b291002
+# ╠═87e0a87a-b1a2-4dc4-b974-6d24ef2a5912
+# ╠═db0da446-b913-41a8-b797-0d05e3c29e33
+# ╠═72c39cc7-7ebc-427b-a37d-e09f8fda641b
+# ╠═3faaf7a1-8a11-4817-96b7-b423ab80e969
+# ╠═09de7780-41d6-400f-bcdf-e0c7329f9bd9
+# ╠═ed62adac-8099-46f8-9ca4-2872e8632028
+# ╠═985f0999-77dd-4ebf-afd7-3d008b72044e
+# ╠═ba75aaa4-cecf-4ccc-a9d2-f460bb2ab809
+# ╠═2cbf0057-4064-4b21-9bc6-a72ae73b4381
+# ╠═192e2d46-df17-4100-b7dd-510f1343da55
+# ╠═3f9131a4-204e-419c-a91a-b7b12dcb0805
+# ╠═1fa62b8f-ae94-4239-9418-3ba7b0b397be
+# ╠═6996ebbd-cf78-4ca2-a7b5-8d57d57effd6
+# ╠═52bdd3c3-eb3b-4d3d-b62e-841325fd7d74
+# ╠═c9d21b80-386d-4353-9c5d-d6b2c6ee80dc
+# ╠═09c437ac-8692-4ba4-94b8-7b3b80282186
+# ╠═acdabe68-e436-46cd-94e7-c2b7745dfcad
+# ╠═9aeaae7d-ba26-454d-aa52-5bb5c496e1f4
+# ╠═deafca23-adc3-4e1a-84d6-7cc96e25f838
+# ╠═3bc638ce-d30d-48bb-84c3-8d0416afe22c
+# ╠═c9ae6ed2-22c0-4903-8438-9e1b5bd110d2
+# ╠═0d9b90e0-027a-4b00-9806-0f7545c78bc5
+# ╠═d59a4d24-e7fe-41a4-b5d4-d7025c39a1ed
+# ╠═bdba719c-e7bc-4bd1-9346-fe9a5a25ba9a
+# ╠═0fe61a07-1d29-4dd5-afe1-e83d891cd813
+# ╠═abce3855-246b-49e5-9268-3c6bd03dd9d8
+# ╠═7c413a2b-d030-4afa-9f47-baf6baf4a563
+# ╠═486cf55b-1ed9-4029-88ec-d96c1db645e5
+# ╠═573c63a9-9fc0-4272-8db1-2df82b451bb2
+# ╠═96acfdfe-68bd-412e-b386-8dab1b31a4a1
+# ╠═f32a220c-dd16-4e49-8670-369d93a1d758
 # ╠═3615ec49-3777-4856-af60-c54b6306e2f6
 # ╠═c435e202-b37c-455c-bf50-03fa6db6a4b7
 # ╠═ace7b3ea-cd31-44b4-aaed-3408df240b78
@@ -628,7 +1317,7 @@ data
 # ╠═ee66593f-93ab-4f92-9316-2e9361d9fa85
 # ╠═9781e526-71b1-4e4d-a0e7-fe127104fbd9
 # ╠═5875994b-39da-4861-9e2c-5aaf12033a21
-# ╠═3cb49c9e-793a-4bc7-a6f6-6fddc72f0ae4
+# ╠═ad4533a9-4682-4387-8875-6de3bfd10bc0
 # ╠═bea8e470-8266-42c5-b399-38735fbff300
 # ╠═30631dbc-c39f-4620-babe-24cdad1bebbe
 # ╠═ef77dc32-1718-419e-8be1-362b1cd55e1b
