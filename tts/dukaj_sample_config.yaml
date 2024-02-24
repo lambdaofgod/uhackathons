@@ -1,0 +1,17 @@
+model_name: "suno/bark"
+voice_presets: [
+  "v2/pl_speaker_0",
+  "v2/pl_speaker_1",
+  "v2/pl_speaker_2",
+  "v2/pl_speaker_3",
+  "v2/pl_speaker_4",
+  "v2/pl_speaker_5",
+  "v2/pl_speaker_6",
+  "v2/pl_speaker_7",
+  "v2/pl_speaker_8",
+  "v2/pl_speaker_9",
+]
+texts: [
+  "Rudobrodu sekretarz stahsa McPhersona - ciemny garnitur, jedwabny krawat, obrączka na palcu (czy byłu mężatu/żonatu?) - stału nieruchomo, światło świec wydobywało z oczu jenu manifestacji demoniczne błyski"
+]
+out_file_template: "output/dukaj_fragment_speech_{}_speaker{}.wav"
