@@ -1,22 +1,23 @@
 from pydantic import BaseModel, Field
 from fastapi import FastAPI
 from transformers import pipeline
-from typing import Dict, List, Optional, Union
-
+from typing import Dict, List, Optional, Union, Any
 import fire
 import uvicorn
 import yaml
 import logging
+import scipy
 
 logging.basicConfig(level=logging.INFO)
 app = FastAPI()
 
 
 class AppConfig(BaseModel):
-    # "facebook/bart-large-mnli"
     model: Optional[str] = "cross-encoder/nli-distilroberta-base"
     host: str = "0.0.0.0"
     port: int = 8765
+    batch_size: int = 64
+    gpu: bool = True
 
 
 class Examples:
@@ -27,7 +28,10 @@ class Examples:
 
 
 def initialize_model(app, config: AppConfig):
-    app.pipe = pipeline(model=config.model)
+    pipe = pipeline(
+        model=config.model, device=0 if config.gpu else -1)
+    app.state.zsl_classifier = ZeroShotClassifier(
+        pipe=pipe, batch_size=config.batch_size)
 
 
 class ZeroShotClassificationRequest(BaseModel):
@@ -44,27 +48,55 @@ class ZeroShotResponse(BaseModel):
     text: str
     label: str
     label_scores: Dict[str, float]
+    entropy: float
 
     @classmethod
     def from_hf_zsl_result(cls, result):
         text = result["sequence"]
         label_scores = dict(zip(result["labels"], result["scores"]))
         label = max(label_scores.keys(), key=label_scores.get)
-        return ZeroShotResponse(text=text, label=label, label_scores=label_scores)
+        entropy = scipy.stats.entropy(list(label_scores.values()))
+        return ZeroShotResponse(text=text, label=label, label_scores=label_scores, entropy=entropy)
+
+
+class ZeroShotClassifier(BaseModel):
+    pipe: Any
+    batch_size: int = 32
+
+    def predict(self, texts, candidate_labels):
+        return [
+            res
+            for batch in self._batched(texts, self.batch_size)
+            for res in self.pipe(batch, candidate_labels=candidate_labels)
+        ]
+
+    def predict_response(self, zsl_request: Union[ZeroShotListClassificationRequest, ZeroShotListClassificationRequest]) -> ZeroShotResponse:
+        if isinstance(zsl_request, ZeroShotClassificationRequest):
+            results = self.predict(
+                [zsl_request.text], zsl_request.candidate_labels)
+            return ZeroShotResponse.from_hf_zsl_result(results[0])
+        else:
+            results = self.predict(
+                zsl_request.texts, zsl_request.candidate_labels)
+            return [ZeroShotResponse.from_hf_zsl_result(result) for result in results]
+
+    @classmethod
+    def _batched(cls, items, batch_size):
+        for i in range(0, len(items), batch_size):
+            yield items[i:i + batch_size]
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 @app.post("/zero_shot_classify_single", response_model=ZeroShotResponse)
-async def generate(zsl_request: ZeroShotClassificationRequest):
-    result = app.pipe(
-        zsl_request.text, candidate_labels=zsl_request.candidate_labels)
-    return ZeroShotResponse.from_hf_zsl_result(result)
+async def generate_single(zsl_request: ZeroShotClassificationRequest):
+    return app.state.zsl_classifier.predict_response(zsl_request)
 
 
 @app.post("/zero_shot_classify", response_model=List[ZeroShotResponse])
 async def generate(zsl_request: ZeroShotListClassificationRequest):
-    results = app.pipe(
-        zsl_request.texts, candidate_labels=zsl_request.candidate_labels)
-    return [ZeroShotResponse.from_hf_zsl_result(result) for result in results]
+    return app.state.zsl_classifier.predict_response(zsl_request)
 
 
 def main(config_path: str = None):
@@ -80,11 +112,3 @@ def main(config_path: str = None):
 
 if __name__ == "__main__":
     fire.Fire(main)
-    # config = AppConfig()
-    # setup_app(app, config)
-    # candidate_labels = ["natural language processing", "computer vision"]
-    # texts = ["Sentence transformers is a library using transformers to embed text"]
-    # results = app.pipe(texts,
-    #                    candidate_labels=candidate_labels)
-
-    # print([ZeroShotResponse.from_hf_zsl_result(res) for res in results])
