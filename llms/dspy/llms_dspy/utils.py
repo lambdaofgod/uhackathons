@@ -9,6 +9,8 @@ from llms_dspy.vllm_client import OpenAIVLLMClient, VLLMClient
 # we use a fixed QdrantRM
 # original one has a bug in the forward method (returns strings instead of dotdict)
 from llms_dspy.qdrant_rm import QdrantRM
+from dspy.retrieve.chromadb_rm import ChromadbRM
+from chromadb.utils import embedding_functions
 
 
 def load_api_key(key_path):
@@ -27,11 +29,19 @@ def get_qdrant_retriever(collection_name, host=None, port=None):
         qdrant_collection_name=collection_name, qdrant_client=client, k=3)
 
 
-def get_llm(llm_type: Literal["vllm", "openai", "openai_vllm"], openai_key_path: Optional[str] = None, vllm_model: Optional[str] = None):
+def get_llm(llm_type: Literal["vllm", "openai", "openai_vllm"], openai_key_path: Optional[str] = None, model_name: Optional[str] = None):
     if llm_type == "openai":
         assert openai_key_path is not None
-        return dspy.OpenAI(api_key=load_api_key(openai_key_path))
+        if model_name is None:
+            model_name = "gpt-3.5-turbo"
+        return dspy.OpenAI(model=model_name, api_key=load_api_key(openai_key_path))
     elif llm_type == "openai_vllm":
-        return OpenAIVLLMClient(model=vllm_model, port=8000, url="http://localhost")
+        return OpenAIVLLMClient(model=model_name, port=8000, url="http://localhost")
     else:
-        return VLLMClient(model=vllm_model, port=8000, url="http://localhost")
+        return VLLMClient(model=model_name, port=8000, url="http://localhost")
+
+
+def get_chroma_retriever(chroma_dir, collection_name):
+    assert Path(chroma_dir).exists()
+    embedding_function = embedding_functions.DefaultEmbeddingFunction()
+    return ChromadbRM(collection_name=collection_name, persist_directory=chroma_dir, embedding_function=embedding_function)
