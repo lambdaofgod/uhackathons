@@ -1,0 +1,193 @@
+#+title: Book Parser
+
+#+BEGIN_SRC python :session book_parser.org  :exports both
+from llama_index.llms.ollama import Ollama
+import bs4
+import requests
+from llama_index.readers.web import SimpleWebPageReader
+import tqdm
+from returns.result import safe, Success
+from llama_index.core import ServiceContext, StorageContext, KnowledgeGraphIndex, VectorStoreIndex, load_index_from_storage, QueryBundle
+from llama_index.core.node_parser import SentenceWindowNodeParser, MarkdownNodeParser, MarkdownElementNodeParser, get_leaf_nodes, get_root_nodes, HierarchicalNodeParser
+from llama_index.core import SimpleDirectoryReader
+from llama_index.core.retrievers import RecursiveRetriever, VectorIndexAutoRetriever, AutoMergingRetriever
+from llama_index.core.query_engine import RetrieverQueryEngine
+import os
+from llama_index.core.postprocessor import MetadataReplacementPostProcessor, SentenceTransformerRerank
+from llama_index.embeddings.fastembed import FastEmbedEmbedding
+
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session book_parser.org  :exports both
+import urllib.request
+import ssl
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session book_parser.org  :exports both
+toc_link = "https://www.feynmanlectures.caltech.edu/I_toc.html"
+
+chapter_link = "https://www.feynmanlectures.caltech.edu/I_{}.html"
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session book_parser.org  :exports both
+documents = SimpleWebPageReader(html_to_text=True).load_data(
+    [toc_link]
+)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session book_parser.org  :exports both
+
+@safe
+def load_webpage_contents(link, verify=False):
+    response = requests.get(link, verify=verify)
+    if response.status_code == 200:
+        return response.text
+    else:
+        raise ValueError(f"page {link} not found")
+
+def load_webpages(links, verify=False, progress=True):
+    if progress:
+        links = tqdm.tqdm(links)
+    contents_results = [
+        load_webpage_contents(link)
+        for link in links
+    ]
+    return [
+        result.unwrap()
+        for result in contents_results
+        if type(result) is Success
+    ]
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC python :session book_parser.org  :exports both
+from llama_index.core.node_parser import NodeParser
+from pydantic import BaseModel
+
+class FeynmanLecturesExtractor(BaseModel):
+    part: str = "I"
+
+    @classmethod
+    def _format_chapter_number(cls, n):
+        str_n = str(n)
+        if len(str_n) == 1:
+            return "0" + str_n
+        else:
+            return str_n
+
+    @property
+    def webpage_links(self):
+        toc_link = f"https://www.feynmanlectures.caltech.edu/{self.part}_toc.html"
+        chapter_links = [
+            "https://www.feynmanlectures.caltech.edu/I_{}.html".format(self._format_chapter_number(i))
+            for i in range(60)
+        ]
+        webpage_links = [toc_link] + chapter_links
+        return webpage_links
+
+    def _get_book_contents_html(self):
+        return load_webpages(self.webpage_links[:5])
+
+    def _get_documents(self):
+        html_webpages_contents = self._get_book_contents_html()
+        return [Document(text=bs4.BeautifulSoup(t).text) for t in html_webpages_contents]
+
+    def create_query_engine(self):
+        page_text_documents = self._get_documents()
+        book_index = build_sentence_window_index(page_text_documents, llm)
+        return get_sentence_window_query_engine(book_index)
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session book_parser.org  :exports both
+feynman_part1_extractor = FeynmanLecturesExtractor(part="I")
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session book_parser.org  :exports both
+feynman_part1_documents = feynman_part1_extractor._get_documents()
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC python :session book_parser.org  :exports both :async
+feynman_part1_query_engine = feynman_part1_extractor.create_query_engine()
+#nodes = (html_documents)
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC python :session book_parser.org  :exports both
+query_response = feynman_part1_query_engine.query("what is the speed of light?")
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session book_parser.org  :exports both
+query_response_source_node = query_response.source_nodes[1]
+
+query_response_source_node
+#+END_SRC
+
+#+RESULTS:
+: Node ID: 1634fe22-9f7f-4ea3-9124-9beadc27fd0f
+: Text: Best regards, Mike Gottlieb feynmanlectures@caltech.edu Editor,
+: The Feynman Lectures on Physics New Millennium Edition
+: The Feynman Lectures on Physics, Volume I mainly mechanics, radiation,
+: and heat Feynman â¢ Leighton â¢ Sands   (Multi-column Table of
+: Contents) (Expand all) (Collapse all)     About the Authors Preface to
+: the New Millenn...
+: Score:  0.041
+
+#+BEGIN_SRC python :session book_parser.org  :exports both
+query_response_source_node
+#+END_SRC
+
+#+RESULTS:
+: Node ID: d764ec02-43ef-4127-9dd6-ba415acaf7ab
+: Text: So a âlawâ  was invented: mass is constant, independent of
+: speed.  That âlawâ is  now found to be incorrect.  Mass is found
+: to increase with velocity, but  appreciable increases require
+: velocities near that of light.  A  true law is: if an object moves
+: with a speed of less than one  hundred miles a second the mass is
+: constant to within o...
+: Score:  0.164
+
+#+BEGIN_SRC python :session book_parser.org  :exports both
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session book_parser.org  :exports both
+llm = Ollama(model="aya")
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session book_parser.org  :exports both :async
+feynman_part1_query_engine = get_sentence_window_query_engine(build_sentence_window_index(page_text_documents, llm))
+#+END_SRC
+
+#+RESULTS:
