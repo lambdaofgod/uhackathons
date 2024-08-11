@@ -1,0 +1,273 @@
+#+title: Reference_abstracts
+
+* Org-ai
+** NO get abstract via API
+
+#+BEGIN_AI
+How to get arXiv paper abstract via API?
+
+[AI]: You can get arXiv paper abstracts via the arXiv API by sending a GET request to the following endpoint:
+
+```
+http://export.arxiv.org/api/query?id_list=<paper_id>
+```
+
+Replace `<paper_id>` with the arXiv paper identifier you are interested in. The response will be in XML format and will contain information about the requested paper, including its abstract. 
+
+You can use tools like cURL or libraries in programming languages like Python or JavaScript to make HTTP requests to the arXiv API and retrieve the paper abstracts.
+
+[ME]: Can it output JSON?
+
+[AI]: The arXiv API does not have built-in support for outputting JSON directly. However, you can convert the XML response you receive from the API into JSON format using various programming libraries that provide XML-to-JSON conversion functionalities.
+
+For example, in Python, you can use the `xmltodict` library to convert the XML response from the arXiv API into a JSON object. Here's a simple example:
+
+```python
+import requests
+import xmltodict
+import json
+
+paper_id = "your_paper_id"
+url = f"http://export.arxiv.org/api/query?id_list={paper_id}"
+response = requests.get(url)
+data_dict = xmltodict.parse(response.content)
+json_data = json.dumps(data_dict)
+
+print(json_data)
+```
+
+By using the `xmltodict` library in the example above, you can convert the XML response from the arXiv API into JSON format for easier processing and manipulation in your code.
+
+[ME]: The URL you provided doesn't give abstracts.
+
+[AI]: I apologize for the oversight. The correct way to retrieve arXiv paper abstracts via the API is to use the `arXiv.org e-prints API v1.1` endpoint.
+
+You can send a GET request to the following endpoint:
+
+```
+http://export.arxiv.org/api/query?id_list=<paper_id>&start=0&max_results=1
+```
+
+Replace `<paper_id>` with the arXiv paper identifier you are interested in. This endpoint will return metadata information about the specified paper, including the abstract, in XML format.
+
+You can then parse the XML response and extract the abstract from it using XML parsing libraries in your preferred programming language.
+
+[ME]: That didn't change anything. Try #+END_AI
+
+** YES Extract abstract
+
+#+BEGIN_AI
+Write Python function `extract_abstract` to extract abstract text from HTML that contains such element:
+
+```
+    <blockquote class="abstract mathjax">
+            <span class="descriptor">Abstract:</span>  In recent years, spectral clustering has become one of the most popular modern clustering algorithms. It is simple to implement, can be solved efficiently by standard linear algebra software, and very often outperforms traditional clustering algorithms such as the k-means algorithm. On the first glance spectral clustering appears slightly mysterious, and it is not obvious to see why it works at all and what it really does. The goal of this tutorial is to give some intuition on those questions. We describe different graph Laplacians and their basic properties, present the most common spectral clustering algorithms, and derive those algorithms from scratch by several different approaches. Advantages and disadvantages of the different spectral clustering algorithms are discussed.
+    </blockquote>
+```
+
+[AI]: Here is a Python function `extract_abstract` that extracts the abstract text from an HTML string that contains the specified element structure:
+
+```python
+from bs4 import BeautifulSoup
+
+def extract_abstract(html_content):
+    # Parse the HTML content
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # Find the blockquote element with class "abstract mathjax"
+    abstract_element = soup.find('blockquote', class_='abstract mathjax')
+    
+    # Check if the abstract element is found
+    if abstract_element:
+        # Extract the text inside the abstract element
+        abstract_text = abstract_element.text
+        return abstract_text.strip()
+    
+    return None
+
+# HTML content containing the abstract element
+html_content = '''
+<blockquote class="abstract mathjax">
+    <span class="descriptor">Abstract:</span> In recent years, spectral clustering has become one of the most popular modern clustering algorithms. It is simple to implement, can be solved efficiently by standard linear algebra software, and very often outperforms traditional clustering algorithms such as the k-means algorithm. On the first glance spectral clustering appears slightly mysterious, and it is not obvious to see why it works at all and what it really does. The goal of this tutorial is to give some intuition on those questions. We describe different graph Laplacians and their basic properties, present the most common spectral clustering algorithms, and derive those algorithms from scratch by several different approaches. Advantages and disadvantages of the different spectral clustering algorithms are discussed.
+</blockquote>
+'''
+
+# Extract the abstract text from the HTML content
+abstract = extract_abstract(html_content)
+print(abstract)
+```
+
+You can run this code snippet to extract the abstract text from the provided HTML content. Make sure you have the `BeautifulSoup` library installed (`pip install beautifulsoup4`) to parse the HTML content.
+
+[ME]: #+END_AI
+
+** Extract arXiv IDs from bibtex
+
+#+BEGIN_AI
+Write Python code that extracts citations in BibTex format given an arXiv paper ID
+
+[AI]: To extract citations in BibTeX format for a paper given its arXiv ID, you can use the arXiv API to fetch the metadata including the reference information. You can then parse the retrieved data to extract the citation details in BibTeX format. Here is an example Python code snippet that demonstrates how to achieve this:
+
+```python
+import requests
+import bibtexparser
+from bibtexparser.bparser import BibTexParser
+from bibtexparser.bibdatabase import BibDatabase
+
+def get_bibtex_citations_from_arxiv(arxiv_id):
+    url = f"https://export.arxiv.org/api/query?id_list={arxiv_id}"
+    response = requests.get(url)
+    
+    if response.status_code == 200:
+        data = response.text
+        bib_database = BibTexParser(common_strings=True).parse(data)
+        
+        if bib_database.entries:
+            return bib_database.to_bibtex()
+        else:
+            return "No citations found for this arXiv ID."
+                
+    else:
+        return "Failed to fetch metadata from arXiv API."
+
+# Specify the arXiv paper ID
+arxiv_id = "1707.06347"
+
+# Extract citations in BibTeX format
+bibtex_citations = get_bibtex_citations_from_arxiv(arxiv_id)
+print(bibtex_citations)
+```
+
+In this code snippet:
+1. We define a function `get_bibtex_citations_from_arxiv` that takes an arXiv ID as input, retrieves the metadata from the arXiv API, and parses it to extract the citation details in BibTeX format.
+2. We make a GET request to the arXiv API to fetch the metadata for the specified arXiv ID.
+3. If the response status is 200 (OK), we parse the retrieved data using `BibTexParser` from the `bibtexparser` library.
+4. We then check if any bibliography entries are found and return the citations in BibTeX format.
+5. Finally, we call the function with a sample arXiv ID ("1707.06347") and print the extracted citations in BibTeX format.
+
+You can run this code snippet in your Python environment after installing the required libraries `requests` and `bibtexparser`.
+
+[ME]: #+END_AI
+
+* Code
+
+#+BEGIN_SRC python :session reference_abstracts.org  :exports both
+from pathlib import Path
+
+
+with open(Path("~/").expanduser() / ".keys/perplexity_api_key.txt") as f:
+    PERPLEXITY_API_KEY = f.read().strip()
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session reference_abstracts.org  :exports both
+import requests
+import xmltodict
+from bs4 import BeautifulSoup
+
+def extract_abstract(html_content):
+    # Parse the HTML content
+    soup = BeautifulSoup(html_content, 'html.parser')
+
+    # Find the blockquote element with class "abstract mathjax"
+    abstract_element = soup.find('blockquote', class_='abstract mathjax')
+
+    # Check if the abstract element is found
+    if abstract_element:
+        # Extract the text inside the abstract element
+        abstract_text = abstract_element.text
+        return abstract_text.strip().strip("Abstract:")
+
+    return None
+
+
+
+def xml_to_dict(xml_data):
+    return xmltodict.parse(xml_data)
+
+paper_id = "2408.03910"
+abs_url = f"http://arxiv.org/abs/{paper_id}"
+
+response = requests.get(abs_url)
+abstract = extract_abstract(response.content)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session reference_abstracts.org  :exports both
+response.text
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <link href="http://arxiv.org/api/query?search_query%3D%26id_list%3D2408.03910%26start%3D0%26max_results%3D10" rel="self" type="application/atom+xml"/>
+  <title type="html">ArXiv Query: search_query=&amp;id_list=2408.03910&amp;start=0&amp;max_results=10</title>
+  <id>http://arxiv.org/api/DyTKYxvdlzcv6hpzf6N1k+JEMWw</id>
+  <updated>2024-08-11T00:00:00-04:00</updated>
+  <opensearch:totalResults xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">1</opensearch:totalResults>
+  <opensearch:startIndex xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">0</opensearch:startIndex>
+  <opensearch:itemsPerPage xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">10</opensearch:itemsPerPage>
+  <entry>
+    <id>http://arxiv.org/abs/2408.03910v1</id>
+    <updated>2024-08-07T17:13:59Z</updated>
+    <published>2024-08-07T17:13:59Z</published>
+    <title>CodexGraph: Bridging Large Language Models and Code Repositories via
+  Code Graph Databases</title>
+    <summary>  Large Language Models (LLMs) excel in stand-alone code tasks like HumanEval
+and MBPP, but struggle with handling entire code repositories. This challenge
+has prompted research on enhancing LLM-codebase interaction at a repository
+scale. Current solutions rely on similarity-based retrieval or manual tools and
+APIs, each with notable drawbacks. Similarity-based retrieval often has low
+recall in complex tasks, while manual tools and APIs are typically
+task-specific and require expert knowledge, reducing their generalizability
+across diverse code tasks and real-world applications. To mitigate these
+limitations, we introduce \framework, a system that integrates LLM agents with
+graph database interfaces extracted from code repositories. By leveraging the
+structural properties of graph databases and the flexibility of the graph query
+language, \framework enables the LLM agent to construct and execute queries,
+allowing for precise, code structure-aware context retrieval and code
+navigation. We assess \framework using three benchmarks: CrossCodeEval,
+SWE-bench, and EvoCodeBench. Additionally, we develop five real-world coding
+applications. With a unified graph database schema, \framework demonstrates
+competitive performance and potential in both academic and real-world
+environments, showcasing its versatility and efficacy in software engineering.
+Our application demo:
+https://github.com/modelscope/modelscope-agent/tree/master/apps/codexgraph_agent.
+</summary>
+    <author>
+      <name>Xiangyan Liu</name>
+    </author>
+    <author>
+      <name>Bo Lan</name>
+    </author>
+    <author>
+      <name>Zhiyuan Hu</name>
+    </author>
+    <author>
+      <name>Yang Liu</name>
+    </author>
+    <author>
+      <name>Zhicheng Zhang</name>
+    </author>
+    <author>
+      <name>Wenmeng Zhou</name>
+    </author>
+    <author>
+      <name>Fei Wang</name>
+    </author>
+    <author>
+      <name>Michael Shieh</name>
+    </author>
+    <arxiv:comment xmlns:arxiv="http://arxiv.org/schemas/atom">work in progress</arxiv:comment>
+    <link href="http://arxiv.org/abs/2408.03910v1" rel="alternate" type="text/html"/>
+    <link title="pdf" href="http://arxiv.org/pdf/2408.03910v1" rel="related" type="application/pdf"/>
+    <arxiv:primary_category xmlns:arxiv="http://arxiv.org/schemas/atom" term="cs.SE" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.SE" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>
+</feed>
+#+end_example
