@@ -1,6 +1,9 @@
 #+title: Reference_abstracts
 
+[[/home/kuba/Projects/org/roam/20230528181338-project_ideas.org::140][20230528181338-project_ideas.org::140 (in /home/kuba/Projects/org/roam/20230528181338-project_ideas.org)]]
+
 * Org-ai
+
 ** NO get abstract via API
 
 #+BEGIN_AI
@@ -149,11 +152,96 @@ You can run this code snippet in your Python environment after installing the re
 
 [ME]: #+END_AI
 
+** References
+
+#+BEGIN_AI
+Write Python function that will extract elements from the following section in HTML:
+
+```
+<section class="ltx_bibliography" id="bib">
+<h2 class="ltx_title ltx_title_bibliography">References</h2>
+<ul class="ltx_biblist">
+<li class="ltx_bibitem" id="bib.bib1">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Arora et al. (2024)</span>
+<span class="ltx_bibblock">
+Daman Arora, Atharv Sonwane, Nalin Wadhwa, Abhav Mehrotra, Saiteja Utpala, Ramakrishna Bairi, Aditya Kanade, and Nagarajan Natarajan.
+
+</span>
+<span class="ltx_bibblock">Masai: Modular architecture for software-engineering ai agents.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib1.1.1">arXiv preprint arXiv:2406.11638</em>, 2024.
+```
+
+
+[AI]: You can use the BeautifulSoup library in Python to perform HTML parsing and data extraction.
+
+The Python function to extract the elements will look something like this:
+
+```python
+from bs4 import BeautifulSoup
+
+def extract_elements(html_section):
+    soup = BeautifulSoup(html_section, 'html.parser')
+    bibsection = soup.find('section', {'class': 'ltx_bibliography'})
+
+    records = []
+    bibitems = bibsection.find_all('li', {'class': 'ltx_bibitem'})
+    for item in bibitems:
+        record = {}
+        record['id'] = item.get('id')
+        record['refnum'] = item.find('span', {'class': 'ltx_tag ltx_role_refnum ltx_tag_bibitem'}).text
+        bibblocks = item.find_all('span', {'class': 'ltx_bibblock'})
+
+        # Assuming the order of span elements are same across all li elements
+        record['authors'] = bibblocks[0].text.strip()
+        record['title'] = bibblocks[1].text.strip()
+        record['source'] = bibblocks[2].text.strip()
+        
+        records.append(record)
+    return records
+```
+
+This function takes an HTML string as argument, parses the string to create a BeautifulSoup object, looks for `<li>` elements with `class="ltx_bibitem"` containing the bibliographic items and extracts the bibliographic details (like id,#+END_AI
+
+
+** arxiv ids
+
+#+BEGIN_AI
+Write Python function extract_arxiv_id(elem) that will extract arXiv ID from the following:
+
+```
+elem = "Arora et\xa0al. (2024)\n\nDaman Arora, Atharv Sonwane, Nalin Wadhwa, Abhav Mehrotra, Saiteja Utpala, Ramakrishna Bairi, Aditya Kanade, and Nagarajan Natarajan.\n\n\nMasai: Modular architecture for software-engineering ai agents.\n\n\narXiv preprint arXiv:2406.11638, 2024.\n\n\n"
+```
+
+[AI]: Sure, you can use Python's regex module (`re`) to search for the arXiv ID pattern in the string. Here's how you might define the function `extract_arxiv_id(elem)`:
+
+```python
+import re
+
+def extract_arxiv_id(elem):
+    match = re.search(r'arXiv:(\d+\.\d+)', elem)
+    if match:
+        return match.group(1)
+    else:
+        return None
+```
+
+In this function, `re.search(r'arXiv:(\d+\.\d+)', elem)` looks for strings that start with "arXiv:", followed by a sequence of digits, a dot, and another sequence of digits. The parentheses in `(\d+\.\d+)` indicate that this part of the pattern is a group — this allows the `.group(1)` function to extract the part of the match that this group corresponds to.
+
+Here's how you might use this function:
+
+```python
+elem = "Arora et\xa0al. (2024)\n\nDaman Arora, Atharv Sonwane, Nalin Wadhwa, Abhav Mehrotra, Saiteja Utpala, Ramakrishna Bairi, Aditya Kanade, and Nagarajan Natarajan.\n\n\nMasai: Modular architecture for software-engineering ai agents.\n\n\narXiv preprint arXiv:2406.11638, 2024.\n\n\n"
+arxiv_id = extract_arxiv_id(elem)
+print(f'Extracted arXiv ID: {arxiv_id}')
+``#+END_AI
+
 * Code
 
 #+BEGIN_SRC python :session reference_abstracts.org  :exports both
 from pathlib import Path
-
+from arxivist.reference_abstracts import ReferenceAbstractExtractor
 
 with open(Path("~/").expanduser() / ".keys/perplexity_api_key.txt") as f:
     PERPLEXITY_API_KEY = f.read().strip()
@@ -162,112 +250,44 @@ with open(Path("~/").expanduser() / ".keys/perplexity_api_key.txt") as f:
 #+RESULTS:
 
 #+BEGIN_SRC python :session reference_abstracts.org  :exports both
-import requests
-import xmltodict
-from bs4 import BeautifulSoup
-
-def extract_abstract(html_content):
-    # Parse the HTML content
-    soup = BeautifulSoup(html_content, 'html.parser')
-
-    # Find the blockquote element with class "abstract mathjax"
-    abstract_element = soup.find('blockquote', class_='abstract mathjax')
-
-    # Check if the abstract element is found
-    if abstract_element:
-        # Extract the text inside the abstract element
-        abstract_text = abstract_element.text
-        return abstract_text.strip().strip("Abstract:")
-
-    return None
-
-
-
-def xml_to_dict(xml_data):
-    return xmltodict.parse(xml_data)
 
 paper_id = "2408.03910"
 abs_url = f"http://arxiv.org/abs/{paper_id}"
+html_url = f"http://arxiv.org/html/{paper_id}"
 
-response = requests.get(abs_url)
-abstract = extract_abstract(response.content)
+abs_response = requests.get(abs_url)
+html_response = requests.get(html_url)
+abstract = extract_abstract(abs_response.content)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session reference_abstracts.org  :exports both :async
+referenced_abstracts = ReferenceAbstractExtractor.get_referenced_paper_abstracts(paper_id)
 #+END_SRC
 
 #+RESULTS:
 
 #+BEGIN_SRC python :session reference_abstracts.org  :exports both
-response.text
+abstract
 #+END_SRC
 
 #+RESULTS:
-#+begin_example
-<?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom">
-  <link href="http://arxiv.org/api/query?search_query%3D%26id_list%3D2408.03910%26start%3D0%26max_results%3D10" rel="self" type="application/atom+xml"/>
-  <title type="html">ArXiv Query: search_query=&amp;id_list=2408.03910&amp;start=0&amp;max_results=10</title>
-  <id>http://arxiv.org/api/DyTKYxvdlzcv6hpzf6N1k+JEMWw</id>
-  <updated>2024-08-11T00:00:00-04:00</updated>
-  <opensearch:totalResults xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">1</opensearch:totalResults>
-  <opensearch:startIndex xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">0</opensearch:startIndex>
-  <opensearch:itemsPerPage xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">10</opensearch:itemsPerPage>
-  <entry>
-    <id>http://arxiv.org/abs/2408.03910v1</id>
-    <updated>2024-08-07T17:13:59Z</updated>
-    <published>2024-08-07T17:13:59Z</published>
-    <title>CodexGraph: Bridging Large Language Models and Code Repositories via
-  Code Graph Databases</title>
-    <summary>  Large Language Models (LLMs) excel in stand-alone code tasks like HumanEval
-and MBPP, but struggle with handling entire code repositories. This challenge
-has prompted research on enhancing LLM-codebase interaction at a repository
-scale. Current solutions rely on similarity-based retrieval or manual tools and
-APIs, each with notable drawbacks. Similarity-based retrieval often has low
-recall in complex tasks, while manual tools and APIs are typically
-task-specific and require expert knowledge, reducing their generalizability
-across diverse code tasks and real-world applications. To mitigate these
-limitations, we introduce \framework, a system that integrates LLM agents with
-graph database interfaces extracted from code repositories. By leveraging the
-structural properties of graph databases and the flexibility of the graph query
-language, \framework enables the LLM agent to construct and execute queries,
-allowing for precise, code structure-aware context retrieval and code
-navigation. We assess \framework using three benchmarks: CrossCodeEval,
-SWE-bench, and EvoCodeBench. Additionally, we develop five real-world coding
-applications. With a unified graph database schema, \framework demonstrates
-competitive performance and potential in both academic and real-world
-environments, showcasing its versatility and efficacy in software engineering.
-Our application demo:
-https://github.com/modelscope/modelscope-agent/tree/master/apps/codexgraph_agent.
-</summary>
-    <author>
-      <name>Xiangyan Liu</name>
-    </author>
-    <author>
-      <name>Bo Lan</name>
-    </author>
-    <author>
-      <name>Zhiyuan Hu</name>
-    </author>
-    <author>
-      <name>Yang Liu</name>
-    </author>
-    <author>
-      <name>Zhicheng Zhang</name>
-    </author>
-    <author>
-      <name>Wenmeng Zhou</name>
-    </author>
-    <author>
-      <name>Fei Wang</name>
-    </author>
-    <author>
-      <name>Michael Shieh</name>
-    </author>
-    <arxiv:comment xmlns:arxiv="http://arxiv.org/schemas/atom">work in progress</arxiv:comment>
-    <link href="http://arxiv.org/abs/2408.03910v1" rel="alternate" type="text/html"/>
-    <link title="pdf" href="http://arxiv.org/pdf/2408.03910v1" rel="related" type="application/pdf"/>
-    <arxiv:primary_category xmlns:arxiv="http://arxiv.org/schemas/atom" term="cs.SE" scheme="http://arxiv.org/schemas/atom"/>
-    <category term="cs.SE" scheme="http://arxiv.org/schemas/atom"/>
-    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
-    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
-  </entry>
-</feed>
-#+end_example
+: Large Language Models (LLMs) excel in stand-alone code tasks like HumanEval and MBPP, but struggle with handling entire code repositories. This challenge has prompted research on enhancing LLM-codebase interaction at a repository scale. Current solutions rely on similarity-based retrieval or manual tools and APIs, each with notable drawbacks. Similarity-based retrieval often has low recall in complex tasks, while manual tools and APIs are typically task-specific and require expert knowledge, reducing their generalizability across diverse code tasks and real-world applications. To mitigate these limitations, we introduce \framework, a system that integrates LLM agents with graph database interfaces extracted from code repositories. By leveraging the structural properties of graph databases and the flexibility of the graph query language, \framework enables the LLM agent to construct and execute queries, allowing for precise, code structure-aware context retrieval and code navigation. We assess \framework using three benchmarks: CrossCodeEval, SWE-bench, and EvoCodeBench. Additionally, we develop five real-world coding applications. With a unified graph database schema, \framework demonstrates competitive performance and potential in both academic and real-world environments, showcasing its versatility and efficacy in software engineering. Our application demo: this https URL.
+
+#+BEGIN_SRC python :session reference_abstracts.org  :exports both
+bibsections = extract_references(html_response.content)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session reference_abstracts.org  :exports both
+import re
+
+arxiv_id = "2408.03910"
+
+ReferenceAbstractExtractor.get_referenced_arxiv_ids(arxiv_id)
+#+END_SRC
+
+#+RESULTS:
+| 2406.11638 | 2108.07732 | 2107.03374 | 2405.19782 | 2406.01359 | 2404.16130 | 2203.03850 | 2402.07630 | 2308.00352 | 2406.00515 | 2310.06770 | 2406.04464 | 2403.08604 | 2404.00599 | 2406.02110 | 2306.03091 | 2406.07003 | 2406.01422 | 2403.06095 | 2307.07924 | 2306.10998 | 2403.14734 | 2402.01030 | 2407.01489 | 2312.17449 | 2405.15793 | 2403.16443 | 2303.12570 | 2404.05427 | 2406.11931 |

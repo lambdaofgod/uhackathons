@@ -12,6 +12,11 @@ eland = "^8.11.1"
 requests = "^2.31.0"
 pydantic = "^2.5.3"
 returns = "^0.22.0"
+fire = "^0.6.0"
+rpyc = "^6.0.0"
+refextract = "^1.1.4"
+xmltodict = "^0.13.0"
+openai = "^1.40.3"
 
 
 [build-system]
