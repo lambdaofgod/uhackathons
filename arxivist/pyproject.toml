@@ -17,6 +17,7 @@ rpyc = "^6.0.0"
 refextract = "^1.1.4"
 xmltodict = "^0.13.0"
 openai = "^1.40.3"
+arxiv2bib = "^1.0.8"
 
 
 [build-system]

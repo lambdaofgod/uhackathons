@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 from typing import Literal, Dict, List
 from tqdm.contrib.concurrent import process_map
 import re
+import arxiv2bib
 
 
 class ReferenceAbstractExtractor:
@@ -16,15 +17,15 @@ class ReferenceAbstractExtractor:
     @classmethod
     def get_abstract_record(cls, arxiv_id):
         return {
-            "id": arxiv_id, "title": cls.get_title(arxiv_id), "abstract": cls.get_abstract(arxiv_id)
+            "id": arxiv_id, "title": cls.get_title(arxiv_id), "abstract": cls.get_abstract(arxiv_id), "bibtex": cls._try_extract_bib(arxiv_id)
         }
 
     @classmethod
-    def get_referenced_paper_abstracts(cls, arxiv_id) -> List[Dict[str, str]]:
+    def get_referenced_paper_abstracts_(cls, arxiv_id) -> List[Dict[str, str]]:
         referenced_ids = cls.get_referenced_arxiv_ids(arxiv_id)
         return [
             {"id": arxiv_id, "title": cls.get_title(
-                arxiv_id), "abstract": cls.get_abstract(arxiv_id)}
+                arxiv_id), "abstract": cls.get_abstract(arxiv_id), "bibtex": cls._try_extract_bib(arxiv_id)}
             for arxiv_id in referenced_ids
         ]
 
@@ -88,5 +89,13 @@ class ReferenceAbstractExtractor:
         match = re.search(r'arXiv:(\d+\.\d+)', elem)
         if match:
             return match.group(1)
+        else:
+            return None
+
+    @classmethod
+    def _try_extract_bib(cls, arxiv_id):
+        bibtexs = arxiv2bib.arxiv2bib([arxiv_id])
+        if len(bibtexs) > 0:
+            return bibtexs[0].bibtex()
         else:
             return None
