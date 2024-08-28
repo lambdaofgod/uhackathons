@@ -68,13 +68,13 @@
         <div class="sidebar-item">Library</div>
     </div>
     <div class="main-content" id="main-content">
+        <!-- this component gets replaced with answer partial -->
         <h1>Where knowledge begins</h1>
-        <!-- Content will be loaded here -->
+        <div class="input-container">
+            <form hx-post="/ask_first" hx-target="#main-content" hx-swap="innerHTML">
+                <input type="text" name="question" placeholder="Ask anything..." autofocus>
+            </form>
+        </div>
     </div>
-    <div class="input-container">
-        <form hx-post="/ask" hx-target="#main-content" hx-swap="beforeend">
-            <input type="text" name="question" placeholder="Ask anything..." autofocus>
-        </form>
-    </div>
-</body>
+    </body>
 </html>

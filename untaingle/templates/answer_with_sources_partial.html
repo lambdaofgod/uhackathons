@@ -1,0 +1,20 @@
+<h3>Sources</h3>
+    {% for source in sources %}
+        <div class="source-item">
+            <a href="{{ source.url }}">{{ source.title }}</a>
+        </div>
+    {% endfor %}
+
+<h3>Answer</h3>
+<script>
+    function getSources() {
+        return JSON.stringify({{ sources | tojson | safe }});
+    }
+</script>
+<div
+  hx-post="/get_llm_response/{{ question }}"
+  hx-vals='js:{"sources": getSources()}'
+  hx-target="this"
+  hx-trigger="load"
+  hx-swap="textContent">
+</div>

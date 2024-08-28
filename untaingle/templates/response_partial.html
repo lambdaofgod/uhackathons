@@ -12,7 +12,7 @@
             padding: 10px;
             border-radius: 8px;
         }
-        .sources, .answer, .related {
+        .sources, .question. .related {
             margin-bottom: 20px;
         }
         .source-item {
@@ -46,19 +46,19 @@
         }
     </style>
 
-    <div class="question">{{ answer.question }}</div>
+    <div class="question">{{ question.question }}</div>
 
-    <div class="sources">
-        {% include "sources_partial.html" %}
-    </div>
-
-    <div class="answer">
-        <h3>Answer</h3>
-        {{ answer.answer_text }}
+    <div class="answer" hx-get="/get_answer_with_sources/{{ question.question }}" hx-target="this" hx-swap="innerHTML" hx-trigger="load">
     </div>
 
     <div class="related">
         <h3>Related Questions</h3>
-        {{ answer.related }}
+        {{ question.related }}
+    </div>
+
+    <div class="input-container">
+        <form hx-post="/ask/{{ question.thread_id }}" hx-target="#main-content" hx-swap="beforeend">
+            <input type="text" name="question" placeholder="Ask anything..." autofocus>
+        </form>
     </div>
 </div>

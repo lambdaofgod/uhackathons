@@ -9,10 +9,7 @@ class Source(BaseModel):
     content: str
 
 
-class Answer(BaseModel):
+class Question(BaseModel):
     thread_id: str
     question: str
-    answer_text: str
-    sources: List[Source]
-    related: List[str]
     created_at: datetime
