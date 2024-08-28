@@ -60,7 +60,9 @@
 </head>
 <body>
     <div class="sidebar">
-        <div class="sidebar-item">New Thread</div>
+        <div class="sidebar-item">
+            <button hx-post="/new_thread" hx-target="body" hx-swap="outerHTML">
+            New Thread</button></div>
         <div class="sidebar-item">Home</div>
         <div class="sidebar-item">Discover</div>
         <div class="sidebar-item">Library</div>

@@ -1,0 +1,6 @@
+<h3>Sources</h3>
+{% for source in answer.sources %}
+    <div class="source-item">
+        <a href="{{ source.url }}">{{ source.title }}</a>
+    </div>
+{% endfor %}

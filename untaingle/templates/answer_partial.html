@@ -1,0 +1,64 @@
+<div class="question-container">
+    <style>
+        .question-container {
+            margin-bottom: 40px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 20px;
+        }
+        .question {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            background-color: #2a2a2a;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .sources, .answer, .related {
+            margin-bottom: 20px;
+        }
+        .source-item {
+            background-color: #2a2a2a;
+            padding: 10px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+        }
+
+        .source-item a {
+            color: #00FFFF;
+            text-decoration: none; /* Optional: removes the underline */
+        }
+
+        /* Optional: style for hover state */
+        .source-item a:hover {
+            color: #00FFFA; /* Replace with your preferred hover color */
+            text-decoration: underline; /* Optional: adds underline on hover */
+        }
+
+        /* Optional: style for hover state */
+        .source-item a:active {
+            color: #00FFFA; /* Replace with your preferred hover color */
+            text-decoration: underline; /* Optional: adds underline on hover */
+        }
+
+        /* Optional: style for hover state */
+        .source-item a:visited {
+            color: #00AAAA; /* Replace with your preferred hover color */
+            text-decoration: underline; /* Optional: adds underline on hover */
+        }
+    </style>
+
+    <div class="question">{{ answer.question }}</div>
+
+    <div class="sources">
+        {% include "sources_partial.html" %}
+    </div>
+
+    <div class="answer">
+        <h3>Answer</h3>
+        {{ answer.answer_text }}
+    </div>
+
+    <div class="related">
+        <h3>Related Questions</h3>
+        {{ answer.related }}
+    </div>
+</div>
