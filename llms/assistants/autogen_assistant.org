@@ -1,0 +1,152 @@
+#+title: Autogen Assistant
+
+
+* LLM setup
+
+#+BEGIN_SRC python :session autogen_assistant.org  :exports both
+import os
+
+with open("/home/kuba/.keys/anthropic_key.txt") as f:
+    os.environ["ANTHROPIC_API_KEY"] = f.read().strip()
+
+config_list = [
+    {
+        "model": "claude-3-5-sonnet-20240620",
+        "api_type": "anthropic",
+    }
+]
+llm_config = {
+    "timeout": 600,
+    "cache_seed": 42,
+    "config_list": config_list,
+    "temperature": 0,
+}
+#+END_SRC
+
+#+RESULTS:
+
+* Helper functions
+
+#+BEGIN_SRC python :session autogen_assistant.org  :exports both
+import json
+from typing import Annotated, Dict, Any
+from duckduckgo_search import DDGS
+
+def ddg_search(query: Annotated[str, "search engine query"], max_results: int=10) -> Dict[str, Any]:
+    with DDGS() as ddgs:
+        results = [r for r in ddgs.text(query, max_results=max_results)]
+        if results:
+            return results
+        else:
+            return {"error": "No results found"}
+
+
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC python :session autogen_assistant.org  :exports both
+helper_functions = [
+    {  "name": "web_search",
+       "function": ddg_search,
+       "description": "web search with duckduckgo"
+   }
+]
+#+END_SRC
+
+#+RESULTS:
+
+* Agent setup
+
+#+BEGIN_SRC python :session autogen_assistant.org  :exports both
+import autogen
+
+assistant = autogen.AssistantAgent(
+    name="assistant",
+    llm_config=llm_config,
+    system_message="""
+        You are a coding architect's assistant. You help with general questions about programming, for example finding out what repositories
+        would be useful for implementing a given feature.
+        You should use web search to back up your answers.
+        When you use web search try to annotate the specific information with sources that were provided in 'title' key
+        from the web search
+    """
+
+)
+# create a UserProxyAgent instance named "user_proxy"
+user_proxy = autogen.UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=3,
+    is_termination_msg=lambda x: x.get("content", "").rstrip().endswith("TERMINATE"),
+    code_execution_config={
+        "work_dir": "web",
+        "use_docker": False,
+    },  # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
+    llm_config=llm_config,
+    system_message="""Reply TERMINATE if the task has been solved at full satisfaction.
+Otherwise, reply CONTINUE, or the reason why the task is not solved yet. Be on point and try not to be verbose, and use straightforward replies. If you decide to continue spell out the reason""",
+)
+
+for helper_function_info in helper_functions:
+    assistant.register_for_llm(name=helper_function_info["name"], description=helper_function_info["description"])(helper_function_info["function"])
+
+    user_proxy.register_for_execution(name=helper_function_info["name"])(helper_function_info["function"])
+#+END_SRC
+
+#+RESULTS:
+
+Callback for registering replies in a file (WTF is this so hard and not enabled in a parameter?)
+
+#+BEGIN_SRC python :session autogen_assistant.org  :exports both
+log_file = "basic_coding_helper.log"
+def log_message(recipient, messages, sender, config):
+    if "callback" in config and  config["callback"] is not None:
+        callback = config["callback"]
+        callback(sender, recipient, messages[-1])
+    with open(log_file, "w+") as f:
+        f.write(json.dumps({"recipient": recipient.name, "messages": messages}))
+    return False, None  # required to ensure the agent communication flow continues
+
+for agent in [user_proxy, assistant]:
+    agent.register_reply(
+        [autogen.Agent, None],
+        reply_func=log_message,
+        config={"callback": None}
+    )
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC python :session autogen_assistant.org  :exports both :async
+n_items = 10
+
+chat_result = user_proxy.initiate_chat(
+    assistant,
+    message=f"""What are some github repositories that implement GraphRAG? Show me {n_items} examples""",
+)
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session autogen_assistant.org  :exports both :results output
+print(json.dumps(chat_result.chat_history[-2], indent=4))
+#+END_SRC
+
+#+RESULTS:
+: {
+:     "content": "Based on the web search results, I can provide you with information about several GitHub repositories that implement or demonstrate GraphRAG (Graph-based Retrieval-Augmented Generation). Here are 10 examples:\n\n1. example-graphrag by stephenc222\nSource: \"GitHub - stephenc222/example-graphrag: Example project demonstrating ...\"\nThis repository provides an example implementation of the Graph RAG pipeline described in the paper \"From Local to Global: A Graph RAG Approach to Query-Focused Summarization\" by Darren Edge et al. It's written in Python and demonstrates how to process documents, build a graph, detect communities, and generate summaries.\n\n2. graphrag-toolkit by AWS Labs\nSource: \"GitHub - awslabs/graphrag-toolkit: Python toolkit for building GraphRAG ...\"\nThis is a Python toolkit for building GraphRAG applications. It provides a framework for automating the construction of a graph from unstructured data and composing question-answering strategies that query this graph when answering user questions.\n\n3. GraphRAG-End-to-End-Implementation-AzureOpenAI by sunnyraj5555\nSource: \"GraphRAG-End-to-End-Implementation-AzureOpenAI - GitHub\"\nThis repository appears to be an end-to-end implementation of GraphRAG using Azure OpenAI.\n\n4. microsoft/graphrag\nSource: \"GitHub - microsoft/graphrag: A modular graph-based Retrieval-Augmented ...\"\nThis is Microsoft's official GraphRAG project repository. It's described as a data pipeline and transformation suite designed to extract meaningful, structured data from unstructured text using the power of LLMs.\n\n5. GraphRAG Solution Accelerator\nSource: \"GraphRAG 101: A New Dawn in Retrieval Augmented Generation\"\nWhile not a specific repository, this article mentions a GraphRAG Solution Accelerator that can be cloned from GitHub and deployed on Azure. It provides step-by-step instructions for setting up GraphRAG.\n\n6. Neo4j LLM Knowledge Graph Builder\nSource: \"Mastering LLM Knowledge Graphs: Build and Implement GraphRAG in Just 5 ...\"\nThis article mentions a public GitHub repo for building and implementing GraphRAG using Neo4j. While the specific repository isn't named, it's described as providing a friction-free environment to try out GraphRAG.\n\n7. GraphRAG Python Package\nSource: \"The Future of AI: GraphRAG - A better way to query interlinked ...\"\nThis article mentions a Python package for GraphRAG, which can be installed in a virtual environment. While not a specific repository, it indicates the existence of a Python implementation that can be used for GraphRAG.\n\n8. Microsoft Research GraphRAG Project\nSource: \"Welcome to GraphRAG - GitHub Pages\"\nThis is likely related to the microsoft/graphrag repository mentioned earlier, but it's worth noting separately as it provides documentation and explanation of the GraphRAG process.\n\n9. LazyGraphRAG\nSource: \"LazyGraphRAG: Setting a new standard for quality and cost\"\nWhile not a specific repository, this article mentions the LazyGraphRAG project, which is an extension of the GraphRAG concept. It's likely that there's a corresponding GitHub repository for this implementation.\n\n10. Zilliz GraphRAG Implementation\nSource: \"GraphRAG Explained: Enhancing RAG with Knowledge Graphs\"\nThis article provides code snippets for implementing GraphRAG using libraries like pandas and tiktoken. While not a full repository, it suggests the existence of GraphRAG implementations in the Zilliz ecosystem.\n\nThese repositories and resources cover a range of GraphRAG implementations, from example projects to full toolkits and enterprise-level solutions. They demonstrate the growing interest in and development of GraphRAG techniques across various platforms and use cases.",
+:     "role": "user"
+: }
+
+#+BEGIN_SRC python :session autogen_assistant.org  :exports both
+n_items = 10
+
+chat_result = user_proxy.initiate_chat(
+    assistant,
+    message=f"""What are some github repositories that implement GraphRAG? Show me {n_items} examples""",
+)
+#+END_SRC
