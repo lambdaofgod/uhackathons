@@ -1,0 +1,287 @@
+#+title: Lightrag
+
+#+BEGIN_SRC python :session lightrag.org  :exports both
+import os
+from lightrag import LightRAG, QueryParam
+from lightrag.llm import gpt_4o_mini_complete, gpt_4o_complete
+
+import tqdm
+import pathlib
+import textract
+#########
+# Uncomment the below two lines if running in a jupyter notebook to handle the async nature of rag.insert()
+# import nest_asyncio
+# nest_asyncio.apply()
+#########
+
+with open(pathlib.Path("~/.keys/openai_key.txt").expanduser(), "r") as f:
+    os.environ["OPENAI_API_KEY"] = f.read().strip()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+* Setup & indexing
+
+#+BEGIN_SRC python :session lightrag.org  :exports both
+WORKING_DIR = "./working/edtech"
+
+rag = LightRAG(
+    working_dir=WORKING_DIR,
+    llm_model_func=gpt_4o_mini_complete  # Use gpt_4o_mini_complete LLM model
+    # llm_model_func=gpt_4o_complete  # Optionally, use a stronger model
+)
+#+END_SRC
+
+#+BEGIN_SRC python :session lightrag.org  :exports both
+
+WORKING_DIR_p = pathlib.Path(WORKING_DIR)
+
+if not WORKING_DIR_p.exists():
+    WORKING_DIR_p.mkdir(parents=True)
+
+        pdf_dir = pathlib.Path("data/edtech_papers")
+
+        for p in tqdm.tqdm(pdf_dir.rglob("*pdf")):
+        text_content = textract.process(str(p))
+        rag.insert(text_content.decode('utf-8'))
+#+END_SRC
+
+#+RESULTS:
+: None
+
+* Querying
+
+#+BEGIN_SRC python :session lightrag.org  :exports both
+llm_edu_question ="What AI techniques that use LLMs are explored in the papers? How are they used in education? Please mention specific use cases and sources they are mentioned in. Example use cases: generating reading comprehension questions, study guides"
+#+END_SRC
+
+#+RESULTS:
+: None
+
+
+#+BEGIN_SRC python :session lightrag.org  :exports both :async
+res = rag.query(llm_edu_question, param=QueryParam(mode="naive"))
+res
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+## AI Techniques Utilizing LLMs in Education
+
+Several AI techniques that leverage Large Language Models (LLMs) are explored in the literature, highlighting their diverse applications within educational settings. These models, particularly through applications such as ChatGPT, are transforming how educators and students interact with learning materials and one another. Here are some specific use cases and the relevant sources that describe these applications:
+
+### 1. Text Generation
+LLMs are widely known for their capacity to generate contextually relevant text based on input prompts. In education, this ability can be utilized to create various learning materials, including:
+
+- **Study Guides**: LLMs can generate concise summaries of complex topics, helping students grasp essential concepts quickly. The deployment of ChatGPT for creating study guides is noted to enhance the quality of instructional content (Kerner, 2023).
+- **Assessment Questions**: Generating reading comprehension questions and exam prompts can streamline assessment preparation. The potential of LLMs to automate this process is highlighted as an asset for teachers and curriculum designers.
+
+### 2. Intelligent Tutoring Systems (ITS)
+Intelligent Tutoring Systems integrate AI techniques including LLMs to provide personalized learning experiences. This category is substantially backed by research:
+
+- **Personalized Learning Paths**: These systems utilize data to adapt learning content according to individual student needs, thus improving comprehension and retention (Chen et al., 2020). Such designs enhance instructional effectiveness and have been proven effective in various studies (Ma et al., 2014; Steenbergen-Hu & Cooper, 2014).
+
+### 3. Conversational AI and Chatbots
+LLMs serve as the backbone for developing advanced conversational AI tools, such as chatbots.
+
+- **Tutoring and Support**: ChatGPT, as an example of a conversational agent, can aid students in their learning processes by answering questions, clarifying doubts, and providing explanations in real-time. This interactive support enriches the educational experience (Wei et al., 2023).
+- **Engagement in Learning**: The continuous interaction through chatbot interfaces enables more engaging learning experiences, which is vital for maintaining student interest in the material (Hwang et al., 2020).
+
+### 4. Content Rewriting and Language Translation
+LLMs are effective in rewriting and summarizing text, as well as translating content, which can benefit multilingual users.
+
+- **Multilingual Education**: In educational contexts, LLMs can translate academic materials, making them accessible to students who speak different languages, thereby fostering inclusivity (Kerner, 2023).
+
+### 5. Policy-Making Advisor
+AI tools, including LLMs, can play a pivotal role in educational policymaking.
+
+- **Guidance for Educational Policies**: AI can analyze data trends and assist policymakers in understanding issues in the education sector, ultimately leading to more informed decision-making (Tsai et al., 2019).
+
+### Conclusion
+In summary, the exploration of AI techniques utilizing LLMs in education reveals a rich array of applications from generating study materials to enhancing personalized learning experiences. The versatility of LLMs like ChatGPT exemplifies how these technologies can innovate teaching and learning in contemporary educational settings. With benefits spanning improved engagement and efficiency, the integration of AI in education is becoming increasingly essential. Sources reflecting these applications include the works of Chen et al. (2020), Kerner (2023), and Tsai et al. (2019).
+#+end_example
+
+#+BEGIN_SRC python :session lightrag.org  :exports both :async
+res = rag.query(llm_edu_question, param=QueryParam(mode="hybrid"))
+res
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Large Language Models (LLMs), like ChatGPT, have gained significant traction in educational contexts, as evidenced by various studies and analyses presented in the literature. These papers generally explore the applications of LLMs in enhancing teaching and learning processes. Below are some specific AI techniques and their applications in education, along with relevant use cases as documented in the research.
+
+### 1. **Generating Reading Comprehension Questions**
+One of the primary uses of LLMs in education is the automatic generation of reading comprehension questions. This technique provides teachers with a tool to create exercises that align with the reading materials students engage with.
+
+- **Use Case**: ChatGPT is used to generate tailored reading comprehension questions adapted for middle school students. These questions are crafted based on provided reading passages, making it easier for educators to assess student understanding and promote engagement with the text.
+- **Source**: The documentation within the *Semester Project Report* emphasizes this application, noting that the educational system leverages LLMs to facilitate the creation of generated reading exercises ([Source 6](https://ssrn.com/abstract=4716855)).
+
+### 2. **Creating Study Guides and Summaries**
+LLMs can synthesize large volumes of text into concise summaries, which can serve as effective study guides for students.
+
+- **Use Case**: In the classroom, professors often employ ChatGPT to assist students in summarizing extensive reading materials. This aids students in grasping key concepts without the burden of processing overwhelming information.
+- **Source**: The *Semester Project Report* highlights that professors utilize ChatGPT to summarize literature, including analysis for research papers ([Source 2](https://ssrn.com/abstract=4716855)).
+
+### 3. **Text Generation for Educational Content**
+LLMs are also capable of generating educational content, such as essays, lectures, or discussion prompts tailored to various academic levels.
+
+- **Use Case**: ChatGPT can generate textual content that serves as a basis for class discussions or writing assignments. This application helps educators to inspire critical thinking and encourage dialogue among students.
+- **Source**: The *Semester Project Report* notes the utilization of ChatGPT for tasks like text generation and brainstorming during discussions ([Source 2](https://ssrn.com/abstract=4716855)).
+
+### 4. **Providing Research Assistance**
+LLMs enhance research efficiency for both students and teachers, allowing for quicker synthesis of relevant information.
+
+- **Use Case**: Professors use ChatGPT to compile literature reviews and analyze qualitative data, thereby reducing their workload while maintaining the quality of academic submissions.
+- **Source**: As mentioned in the *Semester Project Report*, ChatGPT assists professors in tasks such as comparing literature reviews and preparing training materials ([Source 2](https://ssrn.com/abstract=4716855)).
+
+### 5. **Generating Feedback on Student Work**
+LLMs can provide constructive feedback on written assignments, allowing for a more interactive educational experience.
+
+- **Use Case**: Instructors use LLMs to provide feedback on essays and research papers, ensuring that students receive timely responses to their submissions, which encourages ongoing learning.
+- **Source**: The implications of using LLMs for feedback generation are discussed in various sections of the reports focused on LLMs' impact in educational settings ([Source 5](https://ssrn.com/abstract=4716855)).
+
+### Conclusion
+The integration of LLMs in educational practices presents a multitude of opportunities for enhancing both teaching and learning experiences. As highlighted, specific use cases such as generating reading comprehension questions, crafting study guides, creating educational content, providing research assistance, and offering feedback demonstrate the potential of these AI technologies in fostering more efficient and engaging educational environments. Continued exploration and adaptation of LLMs will be critical in shaping the future landscape of education.
+#+end_example
+
+
+#+BEGIN_SRC python :session lightrag.org  :exports both :async
+res = rag.query_with_separate_keyword_extraction(
+    query="How can LLMs help students?",
+    prompt="Mention specific use cases and cite the sources (be as specific as possible, mention the fragments and not just the source document)",
+    param=QueryParam(mode="hybrid")
+)
+res
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+## The Role of LLMs in Supporting Student Learning
+
+Large Language Models (LLMs) like ChatGPT have emerged as transformative tools in higher education, providing a wide array of functionalities that enhance student learning experiences. This emergence is closely tied to improvements in educational technology, particularly in how students can receive assistance in their academic pursuits.
+
+### Specific Use Cases of LLMs
+
+1. **Research Assistance**: Students are leveraging LLMs to aid in research tasks that would traditionally require substantial human effort. They are using these tools for generating literature reviews, summarizing articles, and analyzing qualitative data, which saves valuable time and enhances the efficiency of their academic writing (Source 1, fragment: "Professionals have used ChatGPT to check for errors, conceptual flaws, bias, and generalizations in their writing.").
+
+2. **Text Generation and Summarization**: Within classroom settings, students forgo traditional methods of generating essays and project summaries in favor of LLMs, which can produce coherent text based on prompts given by students. This includes tasks such as brainstorming and creating content for discussions and lectures (Source 1, fragment: "Students are using ChatGPT to summarize longer texts, allowing for more efficient preparation and enabling fruitful discussions.").
+
+3. **Personalized Feedback**: LLMs function as valuable partners in the personalization of education. They provide tailored feedback on writing assignments, allowing students to develop their skills while also adhering to their unique learning styles and needs. This adaptability exemplifies the shift towards more customized learning experiences (Source 1, fragment: "ChatGPT can be utilized to evaluate the effectiveness of assessments in gauging student understanding and learning outcomes.").
+
+4. **Study Strategies and Homework Help**: LLMs have proven to be useful in assisting students with study strategies, offering guidance on how to approach specific topics or assignments effectively. Students report utilizing LLMs for homework support, allowing them to break down complex ideas into more manageable tasks while enhancing their overall understanding of the material (Source 2, fragment: "Students utilize ChatGPT to aid in completing their assignments and enhancing their educational experience.").
+
+5. **Language Support**: For multilingual students or those facing language barriers, LLMs like ChatGPT serve as translation tools, making it easier for them to comprehend course materials and participate actively in discussions, thereby fostering an inclusive educational environment (Source 1, fragment: "Moreover, ChatGPT has proven to be a helpful tool when it comes to writing research papers.").
+
+6. **Resource Recommendations**: LLMs can analyze a student’s specific context and needs to recommend educational resources tailored to their studies. This includes pointing out relevant articles, videos, and textbooks that align with their coursework or research interests (Source 1, fragment: "Students also employ ChatGPT to support their learning and complete academic tasks more effectively.").
+
+### Adaptation of Educational Practices
+
+The integration of LLMs into educational frameworks indicates a broader shift toward adaptive learning environments. Professors have begun to embrace these tools to facilitate discussions, aid in lesson planning, and streamline administrative tasks such as grading (Source 1, fragment: "In the classroom, professors are employing ChatGPT to generate text for discussions, sample questions, and lectures."). This evolving role allows educators to focus more on engaging directly with students and less on routine tasks, thereby improving the quality of interaction in the learning process.
+
+### Conclusion
+
+LLMs are rapidly becoming essential tools for students navigating the complexities of higher education, providing significant assistance in research, writing, and personalized feedback. As these technologies continue to shape educational practices, they will likely redefine the dynamics between students and educators, making way for more efficient and tailored learning experiences. The potential of LLMs not only enhances student support but also fosters an adaptive and inclusive learning environment that meets diverse academic needs.
+#+end_example
+
+#+BEGIN_SRC python :session lightrag.org  :exports both
+res = rag.query(
+    query="Create a study guide on LLMs in education. It should be in the form of questions, organized as a list for each source",
+    param=QueryParam(mode="global")
+)
+res
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+# Study Guide: Large Language Models (LLMs) in Education
+
+## Source: Entities
+
+### CHATGPT
+1. What is ChatGPT and what educational applications does it serve?
+2. In what ways does ChatGPT enhance student engagement and learning experiences?
+3. What are the concerns regarding ChatGPT's impact on creativity and academic integrity?
+4. How does ChatGPT exemplify the principles of the diffusion of innovation in education?
+
+### LLMS
+1. What are Large Language Models (LLMs), and how do they function in education?
+2. What transformative impacts do LLMs have on traditional teaching and learning practices?
+3. According to the text, what skepticism exists among students regarding LLMs?
+4. How might LLMs contribute to personalized learning experiences?
+
+### HIGHER EDUCATION
+1. How is higher education incorporating LLMs into its teaching methodologies?
+2. What challenges do institutions face when integrating LLMs into their curricula?
+3. What role does technology play in shaping educational practices in higher education?
+
+---
+
+## Source: Relationships
+
+### ChatGPT & LLMs
+1. How is ChatGPT categorized within the broader context of LLMs?
+2. What specific educational aids and support does ChatGPT provide in higher education settings?
+
+### LLMs & Students
+1. What is the relationship between students and LLMs based on the educational context?
+2. How do students express both appreciation and concern regarding the use of LLMs in their studies?
+
+### LLMs & Professors
+1. In what ways do professors utilize LLMs like ChatGPT in their teaching practices?
+2. How have professors' roles changed with the integration of LLMs into higher education?
+3. What are the perceived impacts of LLMs on the quality of learning and teaching from the professors’ perspective?
+
+### Learning Quality Improvement
+1. What improvements in learning outcomes are reported by students through the use of LLMs?
+2. What factors contribute to the enhancement of learning experiences when using LLMs?
+
+### Plagiarism
+1. What are the ethical concerns surrounding the use of LLMs in relation to plagiarism?
+2. How can institutions address the issue of plagiarism that arises with the use of LLMs?
+
+---
+
+## Source: Sources
+
+### Semester Project Report
+1. What does the "Semester Project Report" reveal about the influence of LLMs on learning and teaching within higher education?
+2. What findings does the report present regarding students' utilization of LLMs?
+3. How is the data from surveys and interviews used to analyze the impact of LLMs in education?
+4. What are some identified challenges and opportunities related to the integration of LLMs in higher education?
+
+### Connectivism
+1. How does the theory of connectivism relate to the adoption of LLMs in education?
+2. What implications does connectivism have for teaching strategies when employing LLMs?
+
+### Lifelong Learning
+1. How do LLMs promote lifelong learning and self-directed education?
+2. What challenges do learners face in critically evaluating the content generated by LLMs?
+
+---
+
+This study guide provides a framework of questions derived from various sources regarding the integration of LLMs in educational contexts. Use these questions to guide your understanding and further exploration of the topic.
+#+end_example
+
+
+* Visualization
+
+#+BEGIN_SRC python :session lightrag.org  :exports both
+import networkx as nx
+from pyvis.network import Network
+
+# Load the GraphML file
+G = nx.read_graphml('./working/edtech/graph_chunk_entity_relation.graphml')
+
+# Create a Pyvis network
+net = Network(select_menu=True, notebook=True)
+
+# Convert NetworkX graph to Pyvis network
+net.from_nx(G)
+
+# Save and display the network
+net.show('knowledge_graph.html')
+#+END_SRC
+
+#+RESULTS:
+: <IPython.lib.display.IFrame object at 0x16a8a09a0>
