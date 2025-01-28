@@ -2,10 +2,10 @@
 
 import pytrec_eval
 from typing import Dict, Any, List, Optional
-from weaviate.collections.classes.query import _QueryResponse
+import weaviate
 
 
-def weaviate_results_to_pytrec_dict(weaviate_results: _QueryResponse, is_hybrid: bool = False) -> Dict[str, float]:
+def weaviate_results_to_pytrec_dict(weaviate_results, is_hybrid: bool = False) -> Dict[str, float]:
     """
     Converts Weaviate search results to the format expected by pytrec_eval.run.
 
@@ -19,15 +19,15 @@ def weaviate_results_to_pytrec_dict(weaviate_results: _QueryResponse, is_hybrid:
     """
     run_dict = {}
 
-    if not weaviate_results or not weaviate_results.objects:
+    if not weaviate_results:
         return run_dict
 
-    for result in weaviate_results.objects:
-        doc_id = result.uuid
+    for result in weaviate_results:
+        doc_id = result.properties.get('i', result.id)
         if is_hybrid:
-            relevance_score = result.score
+            relevance_score = result.metadata.score
         else:
-            relevance_score = 1 - result.distance  # Invert distance for similarity
+            relevance_score = 1 - result.metadata.distance  # Invert distance for similarity
 
         run_dict[doc_id] = relevance_score
 
@@ -61,28 +61,26 @@ def perform_search_and_evaluate(
     """
     run_dict = {}
     if query_type == "bm25":
-        weaviate_results = collection.query.bm25(
+        results = collection.query.bm25(
             query=query,
-            query_properties=properties,
-            limit=10,
-            return_metadata={"distance": True}
-        )
+            return_properties=properties,
+            limit=10
+        ).with_additional(["distance"]).objects
 
     elif query_type == "hybrid":
-        weaviate_results = collection.query.hybrid(
+        results = collection.query.hybrid(
             query=query,
             alpha=alpha,
-            query_properties=properties,
+            return_properties=properties,
             limit=10,
-            fusion_type="RELATIVE_SCORE",
-            return_metadata={"score": True}
-        )
+            fusion_type="relativeScore"
+        ).with_additional(["score"]).objects
 
     else:
         raise ValueError(f"Invalid query type: {query_type}")
 
     run_dict[query_id] = weaviate_results_to_pytrec_dict(
-        weaviate_results,
+        results,
         is_hybrid=(query_type == "hybrid")
     )
     return run_dict
