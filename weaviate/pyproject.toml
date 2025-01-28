@@ -1,0 +1,12 @@
+[project]
+name = "weaviate_stuff"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=2.2.3",
+    "pytrec-eval>=0.5",
+    "tqdm>=4.67.1",
+    "weaviate-client>=4.10.4",
+]
