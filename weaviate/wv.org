@@ -1,0 +1,189 @@
+#+title: Wv
+
+#+BEGIN_SRC python :session wv.org  :exports both
+import weaviate
+
+client = weaviate.connect_to_local()
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session wv.org  :exports both
+from weaviate.classes.config import Configure
+
+client.collections.create(
+    "Readmes",
+    vectorizer_config=[
+        Configure.NamedVectors.text2vec_transformers(
+            name="readme_vector",
+            source_properties=["readme"],
+            # Further options
+            # model="arctic-embed-m-v1.5",
+            # dimensions=256
+            # base_url="<custom_weaviate_embeddings_url>",
+        )
+    ],
+    # Additional parameters not shown
+)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+<weaviate.Collection config={
+  "name": "Readmes",
+  "description": null,
+  "generative_config": null,
+  "inverted_index_config": {
+    "bm25": {
+      "b": 0.75,
+      "k1": 1.2
+    },
+    "cleanup_interval_seconds": 60,
+    "index_null_state": false,
+    "index_property_length": false,
+    "index_timestamps": false,
+    "stopwords": {
+      "preset": "en",
+      "additions": null,
+      "removals": null
+    }
+  },
+  "multi_tenancy_config": {
+    "enabled": false,
+    "auto_tenant_creation": false,
+    "auto_tenant_activation": false
+  },
+  "properties": [],
+  "references": [],
+  "replication_config": {
+    "factor": 1,
+    "async_enabled": false,
+    "deletion_strategy": "NoAutomatedResolution"
+  },
+  "reranker_config": null,
+  "sharding_config": {
+    "virtual_per_physical": 128,
+    "desired_count": 1,
+    "actual_count": 1,
+    "desired_virtual_count": 128,
+    "actual_virtual_count": 128,
+    "key": "_id",
+    "strategy": "hash",
+    "function": "murmur3"
+  },
+  "vector_index_config": null,
+  "vector_index_type": null,
+  "vectorizer_config": null,
+  "vectorizer": null,
+  "vector_config": {
+    "readme_vector": {
+      "vectorizer": {
+        "vectorizer": "text2vec-transformers",
+        "model": {
+          "poolingStrategy": "masked_mean",
+          "vectorizeClassName": true
+        },
+        "source_properties": [
+          "readme"
+        ]
+      },
+      "vector_index_config": {
+        "quantizer": null,
+        "cleanup_interval_seconds": 300,
+        "distance_metric": "cosine",
+        "dynamic_ef_min": 100,
+        "dynamic_ef_max": 500,
+        "dynamic_ef_factor": 8,
+        "ef": -1,
+        "ef_construction": 128,
+        "filter_strategy": "sweeping",
+        "flat_search_cutoff": 40000,
+        "max_connections": 32,
+        "skip": false,
+        "vector_cache_max_objects": 1000000000000
+      }
+    }
+  }
+}>
+#+end_example
+
+Load readmes
+#+BEGIN_SRC python :session wv.org  :exports both
+import pickle
+import json
+import tqdm
+
+with open("/home/kuba/Projects/github_search/.dagster/storage/corpus_information", "rb") as f:
+    corpora = json.loads(pickle.load(f))
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session wv.org  :exports both
+corpora["readme"]["0"].keys()
+#+END_SRC
+
+#+RESULTS:
+: dict_keys(['text', 'title', 'tasks'])
+
+#+BEGIN_SRC python :session wv.org  :exports both :async
+collection = client.collections.get("Readmes")
+
+with collection.batch.dynamic() as batch:
+    for i, src_obj in tqdm.tqdm(corpora["readme"].items()):
+        weaviate_obj = {
+            "title": src_obj["title"],
+            "readme": src_obj["text"],
+            "i": i
+        }
+
+        # The model provider integration will automatically vectorize the object
+        batch.add_object(
+            properties=weaviate_obj,
+            # vector=vector  # Optionally provide a pre-obtained vector
+        )
+#+END_SRC
+
+#+RESULTS:
+: /tmp/babel-7vCJ5Z/python-YnGsXL
+
+
+#+BEGIN_SRC python :session wv.org  :exports both
+collection = client.collections.get("Readmes")
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session wv.org  :exports both
+collection.search.bm25("object detection")
+#+END_SRC
+
+* Code
+
+
+#+BEGIN_SRC python :session wv.org  :exports both
+collection = client.collections.get("Code")
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session wv.org  :exports both
+wv_results =  collection.query.bm25("object detection")
+wv_results.objects[0].properties["repo_name"]
+#+END_SRC
+
+#+RESULTS:
+: sekilab/RoadDamageDetector
+
+
+#+BEGIN_SRC python :session wv.org  :exports both
+import weaviate_pytrec_eval
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session wv.org  :exports both
+weaviate_pytrec_eval.weaviate_results_to_pytrec_dict(wv_results.objects)
+#+END_SRC
+
+#+RESULTS:
