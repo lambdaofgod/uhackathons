@@ -12,28 +12,30 @@ device = "cuda:0" if torch.cuda.is_available() else "mps"
 #+END_SRC
 
 #+RESULTS:
-: None
 
 #+BEGIN_SRC python :session hf_parler.org  :exports both
-model = ParlerTTSForConditionalGeneration.from_pretrained("parler-tts/parler-tts-mini-v1").to(device)
-tokenizer = AutoTokenizer.from_pretrained("parler-tts/parler-tts-mini-v1")
-
-#+END_SRC
-
-#+BEGIN_SRC python :session hf_parler.org  :exports both :async
-prompt = "Hey, how are you doing today?"
-description = "A female speaker delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker's voice sounding clear and very close up."
-
-input_ids = tokenizer(description, return_tensors="pt").input_ids.to(device)
-prompt_input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
-
-generation = model.generate(input_ids=input_ids, prompt_input_ids=prompt_input_ids)
-audio_arr = generation.cpu().numpy().squeeze()
-sf.write("parler_tts_out.wav", audio_arr, model.config.sampling_rate)
-
-
-
+model = ParlerTTSForConditionalGeneration.from_pretrained("parler-tts/parler-tts-mini-multilingual").to(device)
+tokenizer = AutoTokenizer.from_pretrained("parler-tts/parler-tts-mini-multilingual")
+description_tokenizer = AutoTokenizer.from_pretrained(model.config.text_encoder._name_or_path)
 #+END_SRC
 
 #+RESULTS:
-: /var/folders/t7/9zd9yqf17_zbfq2hwm8tv9ym0000gn/T/babel-xf1hrg/python-P79Suw
+
+#+BEGIN_SRC python :session hf_parler.org  :exports both
+prompt = "Po przemianach politycznych zapoczątkowanych w konsekwencji Okrągłego Stołu i częściowo demokratycznych wyborów parlamentarnych w czerwcu 1989 został powołany pierwszy rząd z premierem spoza partii komunistycznej. Polska zmodyfikowała konstytucję, zmieniając 31 grudnia 1989 nazwę państwa na Rzeczpospolita Polska i stając się krajem demokratycznym. "
+description = "Alex mówi to spokojnym głosem, nagranie ma dobrą jakość"
+
+input_ids = description_tokenizer(description, return_tensors="pt").input_ids.to(device)
+prompt_input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session hf_parler.org  :exports both
+generation = model.generate(input_ids=input_ids, prompt_input_ids=prompt_input_ids)
+audio_arr = generation.cpu().numpy().squeeze()
+sf.write("parler_tts_out.wav", audio_arr, model.config.sampling_rate)
+#+END_SRC
+
+#+RESULTS:
+: None

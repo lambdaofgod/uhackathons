@@ -5,8 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "parler-tts"
+    "llvmlite==0.43",
+    "parler-tts",
 ]
 
 [tool.uv.sources]
-parler-tts = { git = "https://github.com/huggingface/parler-tts.git", rev = "5d0aca9753ab74ded179732f5bd797f7a8c6f8ee" }
+parler-tts = { git = "https://github.com/huggingface/parler-tts.git"}
