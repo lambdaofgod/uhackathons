@@ -1,7 +1,9 @@
 #+title: Autogen Assistant
 
 
-* LLM setup
+* NO Autogen fails to read stuff from duckduckgo...
+<2025-01-28 wto>
+** LLM setup
 
 #+BEGIN_SRC python :session autogen_assistant.org  :exports both
 import os
@@ -23,9 +25,7 @@ llm_config = {
 }
 #+END_SRC
 
-#+RESULTS:
-
-* Helper functions
+** Helper functions
 
 #+BEGIN_SRC python :session autogen_assistant.org  :exports both
 import json
@@ -47,6 +47,21 @@ def ddg_search(query: Annotated[str, "search engine query"], max_results: int=10
 
 
 #+BEGIN_SRC python :session autogen_assistant.org  :exports both
+#+END_SRC
+
+#+RESULTS:
+| title | : | Query Definition & Meaning - Merriam-Webster                        | href                                             | :    | https://www.merriam-webster.com/dictionary/query                    | body                                                                | :    | The meaning of QUERY is question, inquiry. How to use query in a sentence. Synonym Discussion of Query. question, inquiry; a question in the mind : doubt; question mark… See the full definition. Games; Word of the Day; Grammar; Wordplay; Rhymes; Word Finder; Thesaurus; Join MWU; More. Games; Word of the Day; Grammar; |                                                                     |
+| title | : | jQuery                                                              | href                                             | :    | https://jquery.com/                                                 | body                                                                | :    | jQuery is a fast, small, and feature-rich JavaScript library that simplifies HTML document traversal, event handling, animation, and Ajax. Learn more about jQuery, download the latest version, and browse the API documentation and plugins. |                                                                     |
+| title | : | Query - definition of query by The Free Dictionary                  | href                                             | :    | https://www.thefreedictionary.com/query                             | body                                                                | :    | Define query. query synonyms, query pronunciation, query translation, English dictionary definition of query. n. pl. que·ries 1. A question; an inquiry. 2. A doubt in the mind; a mental reservation. 3. A notation, usually a question mark, calling attention to an... |                                                                     |
+| title | : | QUERY definition in American English                                | Collins English Dictionary                       | href | :                                                                   | https://www.collinsdictionary.com/us/dictionary/english/query       | body | :                                                                   | A query is a question, especially one that you ask an organization, publication, or expert. If you have any queries about this insurance, please contact our call center. 2. transitive verb. If you query something, you check it by asking about it because you are not sure if it is correct. |
+| title | : | QUERY                                                               | English meaning - Cambridge Dictionary           | href | :                                                                   | https://dictionary.cambridge.org/dictionary/english/query           | body | :                                                                   | QUERY definition: 1. a question, often expressing doubt about something or looking for an answer from an authority…. Learn more. |
+| title | : | QUERY                                                               | definition in the Cambridge English Dictionary   | href | :                                                                   | https://dictionary.cambridge.org/us/dictionary/english/query        | body | :                                                                   | Query is a noun or verb that means a question, often expressing doubt or looking for information. Learn how to use query in different contexts, such as business, law or search engines, and see synonyms and related words. |
+| title | : | Query - Definition, Meaning & Synonyms - Vocabulary.com             | href                                             | :    | https://www.vocabulary.com/dictionary/query                         | body                                                                | :    | A query is a question, or the search for a piece of information. Other forms: queried; queries; querying A query is a question, or the search for a piece of information.. The Latin root quaere means "to ask" and it's the basis of the words inquiry, question, quest, request, and query.Query often fits the bill when referring to Internet searches, polite professional discourse, and subtle pleas. |                                                                     |
+| title | : | QUERY                                                               | definition in the Cambridge Learner's Dictionary | href | :                                                                   | https://dictionary.cambridge.org/us/dictionary/learner-english/query | body | :                                                                   | QUERY meaning: 1. a question: 2. to ask questions in order to check that something is true or correct: . Learn more. |
+| title | : | Query Definition & Meaning                                          | Britannica Dictionary                            | href | :                                                                   | https://www.britannica.com/dictionary/query                         | body | :                                                                   | QUERY meaning: a question or a request for information about something |
+| title | : | query verb - Definition, pictures, pronunciation and usage notes ... | href                                             | :    | https://www.oxfordlearnersdictionaries.com/definition/english/query_2 | body                                                                | :    | query somebody (especially North American English) I queried a few people on the subject. Word Origin mid 17th cent.: anglicized form of the Latin imperative quaere! , used in the 16th cent. in English as a verb in the sense 'inquire' and as a noun meaning 'query', from Latin quaerere 'ask, seek'. |                                                                     |
+
+#+BEGIN_SRC python :session autogen_assistant.org  :exports both
 helper_functions = [
     {  "name": "web_search",
        "function": ddg_search,
@@ -57,7 +72,7 @@ helper_functions = [
 
 #+RESULTS:
 
-* Agent setup
+** Simple agent setup
 
 #+BEGIN_SRC python :session autogen_assistant.org  :exports both
 import autogen
@@ -97,6 +112,7 @@ for helper_function_info in helper_functions:
 
 #+RESULTS:
 
+*** Utils
 Callback for registering replies in a file (WTF is this so hard and not enabled in a parameter?)
 
 #+BEGIN_SRC python :session autogen_assistant.org  :exports both
@@ -119,13 +135,14 @@ for agent in [user_proxy, assistant]:
 
 #+RESULTS:
 
+*** Examples
 
 #+BEGIN_SRC python :session autogen_assistant.org  :exports both :async
 n_items = 10
 
 chat_result = user_proxy.initiate_chat(
     assistant,
-    message=f"""What are some github repositories that implement GraphRAG? Show me {n_items} examples""",
+    message=f"""What is the output format used by Weaviate for search results?""",
 )
 
 #+END_SRC
@@ -137,10 +154,6 @@ print(json.dumps(chat_result.chat_history[-2], indent=4))
 #+END_SRC
 
 #+RESULTS:
-: {
-:     "content": "Based on the web search results, I can provide you with information about several GitHub repositories that implement or demonstrate GraphRAG (Graph-based Retrieval-Augmented Generation). Here are 10 examples:\n\n1. example-graphrag by stephenc222\nSource: \"GitHub - stephenc222/example-graphrag: Example project demonstrating ...\"\nThis repository provides an example implementation of the Graph RAG pipeline described in the paper \"From Local to Global: A Graph RAG Approach to Query-Focused Summarization\" by Darren Edge et al. It's written in Python and demonstrates how to process documents, build a graph, detect communities, and generate summaries.\n\n2. graphrag-toolkit by AWS Labs\nSource: \"GitHub - awslabs/graphrag-toolkit: Python toolkit for building GraphRAG ...\"\nThis is a Python toolkit for building GraphRAG applications. It provides a framework for automating the construction of a graph from unstructured data and composing question-answering strategies that query this graph when answering user questions.\n\n3. GraphRAG-End-to-End-Implementation-AzureOpenAI by sunnyraj5555\nSource: \"GraphRAG-End-to-End-Implementation-AzureOpenAI - GitHub\"\nThis repository appears to be an end-to-end implementation of GraphRAG using Azure OpenAI.\n\n4. microsoft/graphrag\nSource: \"GitHub - microsoft/graphrag: A modular graph-based Retrieval-Augmented ...\"\nThis is Microsoft's official GraphRAG project repository. It's described as a data pipeline and transformation suite designed to extract meaningful, structured data from unstructured text using the power of LLMs.\n\n5. GraphRAG Solution Accelerator\nSource: \"GraphRAG 101: A New Dawn in Retrieval Augmented Generation\"\nWhile not a specific repository, this article mentions a GraphRAG Solution Accelerator that can be cloned from GitHub and deployed on Azure. It provides step-by-step instructions for setting up GraphRAG.\n\n6. Neo4j LLM Knowledge Graph Builder\nSource: \"Mastering LLM Knowledge Graphs: Build and Implement GraphRAG in Just 5 ...\"\nThis article mentions a public GitHub repo for building and implementing GraphRAG using Neo4j. While the specific repository isn't named, it's described as providing a friction-free environment to try out GraphRAG.\n\n7. GraphRAG Python Package\nSource: \"The Future of AI: GraphRAG - A better way to query interlinked ...\"\nThis article mentions a Python package for GraphRAG, which can be installed in a virtual environment. While not a specific repository, it indicates the existence of a Python implementation that can be used for GraphRAG.\n\n8. Microsoft Research GraphRAG Project\nSource: \"Welcome to GraphRAG - GitHub Pages\"\nThis is likely related to the microsoft/graphrag repository mentioned earlier, but it's worth noting separately as it provides documentation and explanation of the GraphRAG process.\n\n9. LazyGraphRAG\nSource: \"LazyGraphRAG: Setting a new standard for quality and cost\"\nWhile not a specific repository, this article mentions the LazyGraphRAG project, which is an extension of the GraphRAG concept. It's likely that there's a corresponding GitHub repository for this implementation.\n\n10. Zilliz GraphRAG Implementation\nSource: \"GraphRAG Explained: Enhancing RAG with Knowledge Graphs\"\nThis article provides code snippets for implementing GraphRAG using libraries like pandas and tiktoken. While not a full repository, it suggests the existence of GraphRAG implementations in the Zilliz ecosystem.\n\nThese repositories and resources cover a range of GraphRAG implementations, from example projects to full toolkits and enterprise-level solutions. They demonstrate the growing interest in and development of GraphRAG techniques across various platforms and use cases.",
-:     "role": "user"
-: }
 
 #+BEGIN_SRC python :session autogen_assistant.org  :exports both
 n_items = 10
@@ -148,5 +161,15 @@ n_items = 10
 chat_result = user_proxy.initiate_chat(
     assistant,
     message=f"""What are some github repositories that implement GraphRAG? Show me {n_items} examples""",
+)
+#+END_SRC
+
+
+#+BEGIN_SRC python :session autogen_assistant.org  :exports both :async
+n_items = 10
+
+chat_result = user_proxy.initiate_chat(
+    assistant,
+    message=f"""Find out the performance of OpenAI, Cohere and Anthropic models on HumanEval and MBPP starting from 2022 (probably their leaderboards are a good starting point). Write Python script that will put this data on a scatterplot.""",
 )
 #+END_SRC
