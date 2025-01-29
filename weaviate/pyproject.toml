@@ -1,14 +1,12 @@
 [project]
-name = "uhackathons_tts"
+name = "weaviate_stuff"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "parler-tts",
+    "pandas>=2.2.3",
+    "pytrec-eval>=0.5",
     "tqdm>=4.67.1",
-    "llvmlite==0.43",
+    "weaviate-client>=4.10.4",
 ]
-
-[tool.uv.sources]
-parler-tts = { git = "https://github.com/huggingface/parler-tts.git"}

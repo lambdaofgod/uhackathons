@@ -12,7 +12,6 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 #+END_SRC
 
 #+RESULTS:
-: None
 
 #+BEGIN_SRC python :session hf_parler.org  :exports both
 torch.__version__
