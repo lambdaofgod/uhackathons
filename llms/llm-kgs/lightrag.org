@@ -187,80 +187,59 @@ LLMs are rapidly becoming essential tools for students navigating the complexiti
 #+BEGIN_SRC python :session lightrag.org  :exports both
 res = rag.query(
     query="Create a study guide on LLMs in education. It should be in the form of questions, organized as a list for each source",
-    param=QueryParam(mode="global")
+    param=QueryParam(mode="hybrid")
 )
 res
 #+END_SRC
 
 #+RESULTS:
 #+begin_example
-# Study Guide: Large Language Models (LLMs) in Education
+# Study Guide: LLMs in Education
 
-## Source: Entities
+## From the Semester Project Report - Influence of LLMs on Learning and Teaching in Higher Education
 
-### CHATGPT
-1. What is ChatGPT and what educational applications does it serve?
-2. In what ways does ChatGPT enhance student engagement and learning experiences?
-3. What are the concerns regarding ChatGPT's impact on creativity and academic integrity?
-4. How does ChatGPT exemplify the principles of the diffusion of innovation in education?
+1. **What are the primary advantages reported by students when using LLMs like ChatGPT in their learning process?**
+2. **How do LLMs help in enhancing student engagement and personalization in education?**
+3. **What concerns do students have regarding the use of LLMs in their academic work?**
+4. **In what ways do professors utilize LLMs in their teaching practices?**
+5. **How does the adoption of LLMs reflect the shift from traditional teaching methods to more innovative and student-centered approaches?**
+6. **What are the potential long-term effects of LLMs on the quality of learning and teaching in higher education?**
+7. **How do LLMs influence the assessment practices in educational settings?**
+8. **What strategies can institutions adopt to effectively integrate LLMs into their academic frameworks?**
 
-### LLMS
-1. What are Large Language Models (LLMs), and how do they function in education?
-2. What transformative impacts do LLMs have on traditional teaching and learning practices?
-3. According to the text, what skepticism exists among students regarding LLMs?
-4. How might LLMs contribute to personalized learning experiences?
+## From the Source on ChatGPT
 
-### HIGHER EDUCATION
-1. How is higher education incorporating LLMs into its teaching methodologies?
-2. What challenges do institutions face when integrating LLMs into their curricula?
-3. What role does technology play in shaping educational practices in higher education?
+1. **How does ChatGPT exemplify the capabilities and applications of LLM technology in education?**
+2. **What specific educational tasks can ChatGPT assist students with?**
+3. **What ethical considerations arise from the usage of ChatGPT in academic contexts?**
+4. **In what ways does ChatGPT act as a learning tool that enhances the quality of education?**
+5. **How does ChatGPT enable students to personalize their learning experiences?**
 
----
+## From the Overview on LLMs
 
-## Source: Relationships
+1. **What are LLMs and what role do they play in transforming educational practices?**
+2. **How can LLMs support personalized learning experiences for students?**
+3. **What challenges exist in the adoption of LLMs within various educational disciplines?**
+4. **How might the introduction of LLMs exacerbate existing inequalities in education?**
+5. **What regulatory considerations should institutions address when integrating LLMs into their curricula?**
 
-### ChatGPT & LLMs
-1. How is ChatGPT categorized within the broader context of LLMs?
-2. What specific educational aids and support does ChatGPT provide in higher education settings?
+## From the Interviews with Students and Academics
 
-### LLMs & Students
-1. What is the relationship between students and LLMs based on the educational context?
-2. How do students express both appreciation and concern regarding the use of LLMs in their studies?
+1. **What insights do students provide regarding their experiences and hesitations with LLM use?**
+2. **How do professors perceive the impact of LLMs on classroom dynamics and student learning?**
+3. **What specific use cases of ChatGPT were noted by interviewees, and how do they illustrate its practicality in education?**
+4. **How do different disciplinary focuses impact the integration and application of LLMs in teaching?**
+5. **What kinds of training or support do educators believe are necessary for effectively utilizing LLMs in their teaching methodology?**
 
-### LLMs & Professors
-1. In what ways do professors utilize LLMs like ChatGPT in their teaching practices?
-2. How have professors' roles changed with the integration of LLMs into higher education?
-3. What are the perceived impacts of LLMs on the quality of learning and teaching from the professors’ perspective?
+## General Questions on Ethical Usage and Impact
 
-### Learning Quality Improvement
-1. What improvements in learning outcomes are reported by students through the use of LLMs?
-2. What factors contribute to the enhancement of learning experiences when using LLMs?
+1. **What measures can educators take to ensure that LLMs are used ethically in academic settings?**
+2. **How can AI literacy enhance the learning experience and outcomes for students?**
+3. **What are the implications of over-reliance on LLMs concerning academic integrity and critical thinking?**
+4. **What roles do guidelines and institutional policies play in addressing the challenges posed by LLM integration?**
+5. **How does the concept of lifelong learning intersect with the use of LLMs in education?**
 
-### Plagiarism
-1. What are the ethical concerns surrounding the use of LLMs in relation to plagiarism?
-2. How can institutions address the issue of plagiarism that arises with the use of LLMs?
-
----
-
-## Source: Sources
-
-### Semester Project Report
-1. What does the "Semester Project Report" reveal about the influence of LLMs on learning and teaching within higher education?
-2. What findings does the report present regarding students' utilization of LLMs?
-3. How is the data from surveys and interviews used to analyze the impact of LLMs in education?
-4. What are some identified challenges and opportunities related to the integration of LLMs in higher education?
-
-### Connectivism
-1. How does the theory of connectivism relate to the adoption of LLMs in education?
-2. What implications does connectivism have for teaching strategies when employing LLMs?
-
-### Lifelong Learning
-1. How do LLMs promote lifelong learning and self-directed education?
-2. What challenges do learners face in critically evaluating the content generated by LLMs?
-
----
-
-This study guide provides a framework of questions derived from various sources regarding the integration of LLMs in educational contexts. Use these questions to guide your understanding and further exploration of the topic.
+By exploring these questions, students and educators can gain a comprehensive understanding of the impact, challenges, and ethical considerations surrounding the implementation of Large Language Models in educational environments.
 #+end_example
 
 

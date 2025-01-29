@@ -10,6 +10,10 @@ dependencies = [
     "beautifulsoup4>=4.12.3",
     "docker>=7.1.0",
     "duckduckgo-search>=6.3.7",
+    "langgraph-cli[inmem]>=0.1.63",
+    "pypdf2>=3.0.1",
+    "python-dotenv>=1.0.1",
+    "tiktoken>=0.8.0",
 ]
 
 [dependency-groups]

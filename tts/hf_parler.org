@@ -6,8 +6,8 @@ import torch
 from parler_tts import ParlerTTSForConditionalGeneration
 from transformers import AutoTokenizer
 import soundfile as sf
-
-device = "cuda:0" if torch.cuda.is_available() else "mps"
+import tqdm
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 #+END_SRC
 
@@ -15,25 +15,71 @@ device = "cuda:0" if torch.cuda.is_available() else "mps"
 : None
 
 #+BEGIN_SRC python :session hf_parler.org  :exports both
-model = ParlerTTSForConditionalGeneration.from_pretrained("parler-tts/parler-tts-mini-v1").to(device)
-tokenizer = AutoTokenizer.from_pretrained("parler-tts/parler-tts-mini-v1")
-
+torch.__version__
 #+END_SRC
 
-#+BEGIN_SRC python :session hf_parler.org  :exports both :async
-prompt = "Hey, how are you doing today?"
-description = "A female speaker delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker's voice sounding clear and very close up."
+#+RESULTS:
+: 2.5.1
 
-input_ids = tokenizer(description, return_tensors="pt").input_ids.to(device)
+#+BEGIN_SRC python :session hf_parler.org  :exports both
+#model_name = "parler-tts/parler-tts-mini-multilingual-v1.1"
+model = ParlerTTSForConditionalGeneration.from_pretrained("parler-tts/parler-tts-mini-multilingual-v1.1").to(device)
+tokenizer = AutoTokenizer.from_pretrained("parler-tts/parler-tts-mini-multilingual-v1.1")
+description_tokenizer = AutoTokenizer.from_pretrained(model.config.text_encoder._name_or_path)
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session hf_parler.org  :exports both :async
+prompt = "Kierowniku, jest biznes, masz złotóweczkę?"
+description = "A Polish male speaker says this in a shady alley"
+#description = "A male speaker delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker's voice sounding clear and very close up."
+
+input_ids = description_tokenizer(description, return_tensors="pt").input_ids.to(device)
 prompt_input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
 
 generation = model.generate(input_ids=input_ids, prompt_input_ids=prompt_input_ids)
 audio_arr = generation.cpu().numpy().squeeze()
 sf.write("parler_tts_out.wav", audio_arr, model.config.sampling_rate)
-
-
-
 #+END_SRC
 
 #+RESULTS:
-: /var/folders/t7/9zd9yqf17_zbfq2hwm8tv9ym0000gn/T/babel-xf1hrg/python-P79Suw
+: None
+
+#+BEGIN_SRC python :session hf_parler.org  :exports both
+model.config.sampling_rate
+#+END_SRC
+
+#+RESULTS:
+: 44100
+
+#+BEGIN_SRC python :session hf_parler.org  :exports both
+audio_arr.shape
+#+END_SRC
+
+#+RESULTS:
+| 123904 |
+
+
+#+BEGIN_SRC python :session hf_parler.org  :exports both
+prompts = [
+    "The sky above the port was the color of television, tuned to a dead channel.",
+    "Hey, how are you doing today? How is the weather?",
+
+]
+#+END_SRC
+
+#+RESULTS:
+: None
+
+
+#+BEGIN_SRC python :session hf_parler.org  :exports both :async
+for prompt in tqdm.tqdm(prompts):
+    prompt_input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
+
+    generation = model.generate(input_ids=input_ids, prompt_input_ids=prompt_input_ids)
+#+END_SRC
+
+#+RESULTS:
+: None
