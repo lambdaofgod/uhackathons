@@ -8,7 +8,6 @@ dependencies = [
     "parler-tts",
     "tqdm>=4.67.1",
     "llvmlite==0.43",
+    "azure-cognitiveservices-speech==1.30.0",
+    "python-dotenv>=1.0.1",
 ]
-
-[tool.uv.sources]
-parler-tts = { git = "https://github.com/huggingface/parler-tts.git"}
