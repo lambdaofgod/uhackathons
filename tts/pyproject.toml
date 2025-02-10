@@ -10,4 +10,8 @@ dependencies = [
     "llvmlite==0.43",
     "azure-cognitiveservices-speech==1.30.0",
     "python-dotenv>=1.0.1",
+    "kokoro>=0.7.13",
+    "soundfile>=0.12.1",
+    "misaki[en]>=0.7.13",
+    "pip>=25.0.1",
 ]
