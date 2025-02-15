@@ -1,0 +1,25 @@
+#+title: Pl Tts
+
+
+#+BEGIN_SRC python :session pl_tts.org  :exports both :async
+from datasets import load_dataset
+#+END_SRC
+
+#+RESULTS:
+: None
+
+* NO Common Voice
+#+BEGIN_SRC python :session pl_tts.org  :exports both
+cv_17 = load_dataset("mozilla-foundation/common_voice_17_0", "default", split="train")
+#+END_SRC
+
+#+RESULTS:
+
+* YES Voxpopuli
+
+#+BEGIN_SRC python :session pl_tts.org  :exports both :async
+voxpopuli_all = load_dataset("facebook/voxpopuli", "pl", trust_remote_code=True)
+#+END_SRC
+
+#+RESULTS:
+: None
