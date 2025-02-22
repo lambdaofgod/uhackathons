@@ -18,6 +18,5 @@ dependencies = [
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tools.setuptools]
-packages = ["noteboard"]
-package-dir = {"noteboard" = "noteboard"}
+[tool.setuptools.packages.find]
+where = ["."]
