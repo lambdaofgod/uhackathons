@@ -1,0 +1,11 @@
+[project]
+name = "subtitles"
+version = "0.1.0"
+description = "Extract subtitles from video files using Whisper"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "ffmpeg-python>=0.2.0",
+    "fire>=0.7.0",
+    "openai-whisper>=20231117",
+]
