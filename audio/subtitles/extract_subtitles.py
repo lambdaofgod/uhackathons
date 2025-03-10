@@ -10,6 +10,7 @@ import ffmpeg
 import time
 import platform
 import glob
+import pathlib
 
 
 def setup_logging(log_level):
@@ -74,6 +75,63 @@ def is_apple_silicon():
     return platform.system() == "Darwin" and platform.machine().startswith(("arm", "aarch"))
 
 
+def format_time_duration(seconds):
+    """
+    Format a duration in seconds to a human-readable string.
+    
+    Args:
+        seconds: Time duration in seconds
+        
+    Returns:
+        Formatted string like "5.20 seconds", "2 minutes and 30.50 seconds", etc.
+    """
+    if seconds < 60:
+        return f"{seconds:.2f} seconds"
+    elif seconds < 3600:
+        minutes = int(seconds // 60)
+        remaining_seconds = seconds % 60
+        return f"{minutes} minutes and {remaining_seconds:.2f} seconds"
+    else:
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        remaining_seconds = seconds % 60
+        return f"{hours} hours, {minutes} minutes and {remaining_seconds:.2f} seconds"
+
+
+def run_ffmpeg_extract_audio(input_file, output_audio_path, log_level):
+    """
+    Extract audio from a video file using ffmpeg.
+    
+    Args:
+        input_file: Path to the input video file
+        output_audio_path: Path where the extracted audio will be saved
+        log_level: Logging level to determine ffmpeg verbosity
+        
+    Raises:
+        ffmpeg.Error: If ffmpeg encounters an error during extraction
+    """
+    logger = logging.getLogger("subtitles")
+    logger.debug(f"Running FFmpeg to extract audio to {output_audio_path}")
+    
+    # Use ffmpeg-python to extract audio
+    (
+        ffmpeg
+        .input(input_file)
+        .output(
+            output_audio_path,
+            format='wav',
+            acodec='pcm_s16le',
+            ac=1,
+            ar='16000'
+        )
+        .global_args('-y')  # Overwrite output files without asking
+        .global_args('-loglevel', 'error' if log_level.upper() in ["ERROR", "CRITICAL"] else 'info')
+        .run(capture_stdout=True, capture_stderr=True)
+    )
+    
+    logger.debug("Audio extraction completed successfully")
+
+
 def extract_subtitles(input_pattern, output_file=None, language="en", model_name="medium", log_level="INFO", use_gpu=None):
     """
     Extract subtitles from video files using ffmpeg and whisper.
@@ -97,8 +155,11 @@ def extract_subtitles(input_pattern, output_file=None, language="en", model_name
         if use_gpu:
             logger.info("Apple Silicon detected, enabling GPU acceleration")
     
+    # Expand ~ in the input pattern if present
+    expanded_pattern = os.path.expanduser(input_pattern)
+    
     # Find all files matching the pattern
-    input_files = glob.glob(input_pattern, recursive=True)
+    input_files = glob.glob(expanded_pattern, recursive=True)
     
     if not input_files:
         logger.error(f"No files found matching pattern '{input_pattern}'")
@@ -197,25 +258,7 @@ def extract_subtitles(input_pattern, output_file=None, language="en", model_name
             # Extract audio using ffmpeg-python
             logger.info(f"Extracting audio from '{input_file}'...")
             try:
-                logger.debug(f"Running FFmpeg to extract audio to {temp_audio_path}")
-                
-                # Use ffmpeg-python to extract audio
-                (
-                    ffmpeg
-                    .input(input_file)
-                    .output(
-                        temp_audio_path,
-                        format='wav',
-                        acodec='pcm_s16le',
-                        ac=1,
-                        ar='16000'
-                    )
-                    .global_args('-y')  # Overwrite output files without asking
-                    .global_args('-loglevel', 'error' if log_level.upper() in ["ERROR", "CRITICAL"] else 'info')
-                    .run(capture_stdout=True, capture_stderr=True)
-                )
-                
-                logger.debug("Audio extraction completed successfully")
+                run_ffmpeg_extract_audio(input_file, temp_audio_path, log_level)
             except ffmpeg.Error as e:
                 logger.error(f"FFmpeg error: {e.stderr.decode('utf-8', errors='replace')}")
                 failed_files += 1
@@ -250,19 +293,7 @@ def extract_subtitles(input_pattern, output_file=None, language="en", model_name
             # Calculate and display the file execution time
             file_end_time = time.time()
             file_execution_time = file_end_time - file_start_time
-            
-            # Format the time nicely
-            if file_execution_time < 60:
-                time_str = f"{file_execution_time:.2f} seconds"
-            elif file_execution_time < 3600:
-                minutes = int(file_execution_time // 60)
-                seconds = file_execution_time % 60
-                time_str = f"{minutes} minutes and {seconds:.2f} seconds"
-            else:
-                hours = int(file_execution_time // 3600)
-                minutes = int((file_execution_time % 3600) // 60)
-                seconds = file_execution_time % 60
-                time_str = f"{hours} hours, {minutes} minutes and {seconds:.2f} seconds"
+            time_str = format_time_duration(file_execution_time)
             
             logger.info(f"File processed successfully in {time_str}")
         
@@ -278,19 +309,7 @@ def extract_subtitles(input_pattern, output_file=None, language="en", model_name
     # Calculate and display the total execution time
     end_time = time.time()
     execution_time = end_time - start_time
-    
-    # Format the time nicely
-    if execution_time < 60:
-        time_str = f"{execution_time:.2f} seconds"
-    elif execution_time < 3600:
-        minutes = int(execution_time // 60)
-        seconds = execution_time % 60
-        time_str = f"{minutes} minutes and {seconds:.2f} seconds"
-    else:
-        hours = int(execution_time // 3600)
-        minutes = int((execution_time % 3600) // 60)
-        seconds = execution_time % 60
-        time_str = f"{hours} hours, {minutes} minutes and {seconds:.2f} seconds"
+    time_str = format_time_duration(execution_time)
     
     # Summary
     logger.info(f"\nSummary: Processed {len(input_files)} files in {time_str}")
