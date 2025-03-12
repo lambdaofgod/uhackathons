@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "bitsandbytes==0.42.0",
+    "datamapplot>=0.3.0",
     "ipykernel>=6.29.5",
     "latentscope>=0.5.2",
     "networkx>=3.2.1",
