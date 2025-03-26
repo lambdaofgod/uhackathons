@@ -1,0 +1,128 @@
+#+title: Yt Analysis
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both
+import pandas as pd
+import glob
+
+glob.glob("data/*")
+#+END_SRC
+
+#+RESULTS:
+| data/playlist_info.jsonl | data/Takeout |
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both :async
+playlist_df = pd.read_json("data/playlist_info.jsonl", lines=True, orient="records")
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both
+playlist_df[["title", "Playlist", "description"]].head()
+#+END_SRC
+
+#+RESULTS:
+:                                                title  ...                                        description
+: 0                       Stars Of The Lid - Goodnight  ...                    "Music for Nitrous Oxide", 1995
+: 1  Ambient Music - DigitalSimplyWorld - Transmiss...  ...  Free download Solar Observers https://digitals...
+: 2                                    Sundrugs - 2082  ...  After remarkable debut "Hidden Scenes" last ye...
+: 3                 Sylvain Chauveau - A Cloud Of Dust  ...  Sylvain Chauveau - A Cloud Of Dust.\r\nTaken f...
+: 4         A Winged Victory For The Sullen - Atomos I  ...  A Winged Victory For The Sullen : www.awvfts.c...
+:
+: [5 rows x 3 columns]
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both
+playlist_df["Playlist"].value_counts().head(10)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Playlist
+Watch later videos          4417
+code videos                   42
+emotional support videos      33
+Historical videos             28
+Rozwoj videos                 27
+ai_tools videos               22
+llms videos                   21
+Gen art videos                19
+math_edu videos               19
+Notes videos                  17
+Name: count, dtype: int64
+#+end_example
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both
+# Import necessary libraries
+from listboard.cluster_analyzer import TextClusterAnalyzer
+from listboard.util import SentenceTransformerEncoder
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
+import numpy as np
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both :async
+# Create feature extraction with Sentence Transformer using MPNet
+sentence_encoder = SentenceTransformerEncoder(
+    model_name='all-mpnet-base-v2',  # More powerful model than MiniLM
+    batch_size=16,  # Smaller batch size as MPNet is larger
+    show_progress=True
+)
+
+# Dimensionality reduction with PCA
+# K-means clustering
+n_clusters = 20
+kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+
+# Create TextClusterAnalyzer with sentence transformer
+cluster_analyzer = TextClusterAnalyzer.create(
+    df=playlist_df,
+    text_columns=["title", "description"],
+    clusterer=kmeans,
+    feature_extractor=sentence_encoder,
+    text_joiner="\n"
+)
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both :async
+features = cluster_analyzer.text_clusterer_result.features
+labels = cluster_analyzer.text_clusterer_result.labels
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both :async
+cluster_df = playlist_df.copy()
+cluster_df['cluster'] = labels
+
+# Get representative examples for each cluster using the new method
+cluster_examples = cluster_analyzer.get_cluster_examples(n_per_cluster=3)
+
+# Show the most common playlists in each cluster
+for i in range(n_clusters):
+    print(f"\nCluster {i} - Top Playlists:")
+    print(cluster_df[cluster_df['cluster'] == i]['Playlist'].value_counts().head(5))
+    
+    # Show representative examples from this cluster
+    print(f"\nCluster {i} - Representative Descriptions (closest to centroid):")
+    examples = cluster_examples[cluster_examples['cluster_id'] == i]
+    
+    for _, row in examples.iterrows():
+        example = row['extracted_text']
+        title = row['title']
+        playlist = row['Playlist']
+        print(f"- [{playlist}] {title}")
+        print(f"  {example[:100]}..." if len(example) > 100 else f"  {example}")
+    
+    print("-" * 50)
+#+END_SRC
+
+#+RESULTS:
+: None
