@@ -6,6 +6,7 @@ similar to those in llamaindex_egents.py.
 """
 
 from typing import Dict
+import fire
 
 from fastmcp import FastMCP
 
@@ -52,6 +53,15 @@ def get_repo_latest_commit_date(repo_url: str) -> str:
     return extract_date(commit_time)
 
 
+def main(port: int = 8000):
+    """
+    Run the MCP server on the specified port.
+    
+    Args:
+        port: The port number to run the server on (default: 8000)
+    """
+    mcp.run(port=port)
+
 # Run the server if this file is executed directly
 if __name__ == "__main__":
-    mcp.run()
+    fire.Fire(main)
