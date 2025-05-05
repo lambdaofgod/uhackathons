@@ -15,7 +15,7 @@ from tool_helpers import LinkValidator, GitHubCommitChecker, extract_date
 # Create the MCP server
 mcp = FastMCP(
     "Egent Tools",
-    dependencies=["requests"],
+    dependencies=["requests", "pydantic"],
 )
 
 # Initialize the helper classes
@@ -27,10 +27,10 @@ github_commit_checker = GitHubCommitChecker()
 def check_link_statuses(text: str) -> Dict[str, int]:
     """
     Parse links from the input text and return the dictionary mapping the links to their HTTP statuses.
-    
+
     Args:
         text: input string
-        
+
     Returns:
         dict: dictionary mapping the links to their HTTP statuses
     """
@@ -41,10 +41,10 @@ def check_link_statuses(text: str) -> Dict[str, int]:
 def get_repo_latest_commit_date(repo_url: str) -> str:
     """
     Extract github repository last commit date.
-    
+
     Args:
         repo_url: string, the github repo url that starts with "https://github.com" or "github.com"
-        
+
     Returns:
         str: date in format "Y-M-D"
     """
