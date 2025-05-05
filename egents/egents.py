@@ -401,23 +401,29 @@ def get_agent_output(prompt, mode="default", ctx=None):
 
     return response.response
 
-prompt = 'What is the policy gradient theorem? Write down the theorem formally, use LaTeX'
-get_agent_output(prompt)
+# Example usage
+if __name__ == "__main__":
+    # Example 1: Policy gradient theorem
+    prompt = 'What is the policy gradient theorem? Write down the theorem formally, use LaTeX'
+    get_agent_output(prompt)
 
-prompt = """
-Suggest 5 introductory papers from 2025 in the field of mechanistic interpretability
-""".strip()
-agent_response = get_agent_output(prompt)
-agent_response
+    # Example 2: Research papers
+    prompt = """
+    Suggest 5 introductory papers from 2025 in the field of mechanistic interpretability
+    """.strip()
+    agent_response = get_agent_output(prompt)
+    print(agent_response)
 
-prompt = """
-How can I use Arize Phoenix with LlamaIndex?
-""".strip()
-agent_response = get_agent_output(prompt)
-agent_response
+    # Example 3: Arize Phoenix with LlamaIndex
+    prompt = """
+    How can I use Arize Phoenix with LlamaIndex?
+    """.strip()
+    agent_response = get_agent_output(prompt)
+    print(agent_response)
 
-prompt = """
-How can I use tools with smolagents LLM agent library?
-""".strip()
-agent_response = get_agent_output(prompt, mode="thinking")
-agent_response
+    # Example 4: Tools with smolagents
+    prompt = """
+    How can I use tools with smolagents LLM agent library?
+    """.strip()
+    agent_response = get_agent_output(prompt, mode="thinking")
+    print(agent_response)
