@@ -48,7 +48,16 @@ def firecrawl_tool_llamaindex(url: str) -> dict:
     Returns:
        dict: dictionary with markdown and metadata keys
     """
-    return app.scrape_url(url)
+    # Use the MCP server for scraping
+    import requests
+    response = requests.post(
+        "http://localhost:8000/scrape",
+        json={"url": url}
+    )
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return {"markdown": f"Error scraping URL: {response.status_code}", "metadata": {}}
 
 # Create LlamaIndex tools
 link_status_tool = FunctionTool.from_defaults(

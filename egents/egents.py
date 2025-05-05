@@ -203,15 +203,7 @@ def get_repo_latest_commit_date_llamaindex(repo_url: str) -> str:
     """
     return extract_date(github_commit_checker.get_last_commit_time(repo_url))
 
-def firecrawl_tool_llamaindex(url: str) -> dict:
-    """
-    Scrape given URL with firecrawl
-    Args:
-       url: link string
-    Returns:
-       dict: dictionary with markdown and metadata keys
-    """
-    return app.scrape_url(url)
+# firecrawl_tool_llamaindex is now imported from llamaindex_egents
 
 # Create LlamaIndex tools
 link_status_tool = FunctionTool.from_defaults(
