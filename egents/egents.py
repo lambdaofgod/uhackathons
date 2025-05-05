@@ -1,19 +1,13 @@
-import pathlib
-import os
+# Import from our modules
+from llms import load_api_keys
+from tool_helpers import github_commit_checker
+from llamaindex_egents import get_agent_output, ctx
 
-api_key_path = "~/.keys/anthropic_key.txt"
+# Load API keys
+load_api_keys()
 
-with open(pathlib.Path(api_key_path).expanduser()) as f:
-    api_key = f.read().strip()
-    os.environ["ANTHROPIC_API_KEY"] = api_key
-
-with open(pathlib.Path("~/.keys/gemini_api_key.txt").expanduser()) as f:
-    api_key = f.read().strip()
-    os.environ["GEMINI_API_KEY"] = api_key
-
-with open(pathlib.Path("~/.keys/brave.txt").expanduser()) as f:
-    api_key = f.read().strip()
-    os.environ["BRAVE_API_KEY"] = api_key
+# Create a GitHub commit checker instance
+github_commit_checker = GitHubCommitChecker()
 
 
 
