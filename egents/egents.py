@@ -1,6 +1,6 @@
 # Import from our modules
 from llms import load_api_keys
-from tool_helpers import github_commit_checker
+from tool_helpers import GitHubCommitChecker
 from llamaindex_egents import get_agent_output, ctx
 
 # Load API keys

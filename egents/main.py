@@ -13,6 +13,7 @@ import fire
 
 # Import from egents.py
 from egents import get_agent_output, ctx, assistant_workflow
+from egents import GitHubCommitChecker
 
 # Create FastAPI app
 app = FastAPI(

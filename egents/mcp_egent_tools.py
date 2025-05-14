@@ -11,7 +11,8 @@ import fire
 from fastmcp import FastMCP
 
 # Import the classes from tool_helpers
-from tool_helpers import LinkValidator, GitHubCommitChecker, extract_date
+from tool_helpers import LinkValidator, GitHubCommitChecker
+from egents import extract_date
 
 # Create the MCP server
 mcp = FastMCP(
