@@ -56,11 +56,12 @@ def get_repo_latest_commit_date(repo_url: str) -> str:
 def main(port: int = 8000):
     """
     Run the MCP server on the specified port.
-    
+
     Args:
         port: The port number to run the server on (default: 8000)
     """
-    mcp.run(port=port)
+    mcp.run(transport="sse", port=port)
+
 
 # Run the server if this file is executed directly
 if __name__ == "__main__":
