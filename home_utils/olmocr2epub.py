@@ -93,7 +93,7 @@ def _extract_toc_entries_from_pages(
                         f"Warning: Could not parse page number '{page_ref_str}' from TOC entry on page {page_num}."
                     )
                     # page_ref remains None
-            
+
             # If no page reference in text OR parsing failed
             if page_ref is None:
                 # Use a high starting page number if we don't have actual page refs
@@ -189,23 +189,27 @@ def _extract_toc_from_contents_page(
                 page_ref_str = match.group(3)
                 page_ref = None
 
-                if page_ref_str:  # If a page number string is present in the regex match
+                if (
+                    page_ref_str
+                ):  # If a page number string is present in the regex match
                     try:
                         page_ref = int(page_ref_str)
                         page_ref += page_offset  # Apply offset to parsed page number
                     except ValueError:
                         print(f"Warning: Could not parse page number from '{line}'")
                         # page_ref remains None
-                
+
                 if page_ref is None:  # If no page number in text OR parsing failed
-                    page_ref = 1000 + len(toc_entries) # Assign artificial page number
+                    page_ref = 1000 + len(toc_entries)  # Assign artificial page number
 
                 toc_entries.append((page_ref, roman_num, title))
 
     return toc_entries
 
 
-def _find_toc_entries(pages_data: List[Dict[str, Any]], first_chapter_page_number: Optional[int]) -> List[Tuple[int, str, str]]:
+def _find_toc_entries(
+    pages_data: List[Dict[str, Any]], first_chapter_page_number: Optional[int]
+) -> List[Tuple[int, str, str]]:
     """
     Finds TOC entries, calculates page offset if first_chapter_page_number is provided,
     and sorts them by page reference.
@@ -218,38 +222,61 @@ def _find_toc_entries(pages_data: List[Dict[str, Any]], first_chapter_page_numbe
         preliminary_toc_entries = []
         if contents_page_idx is not None:
             # Try direct extraction from "CONTENTS" page first with offset 0
-            preliminary_toc_entries = _extract_toc_from_contents_page(pages_data, contents_page_idx, 0)
+            preliminary_toc_entries = _extract_toc_from_contents_page(
+                pages_data, contents_page_idx, 0
+            )
 
         if not preliminary_toc_entries:
             # Fallback to regex scan on a limited range for offset calculation
             prelim_scan_range = range(len(pages_data))
             if contents_page_idx is not None:
-                prelim_scan_range = range(max(0, contents_page_idx - 1), min(contents_page_idx + 3, len(pages_data)))
-            else: # If no CONTENTS page, scan first few pages as a guess
+                prelim_scan_range = range(
+                    max(0, contents_page_idx - 1),
+                    min(contents_page_idx + 3, len(pages_data)),
+                )
+            else:  # If no CONTENTS page, scan first few pages as a guess
                 prelim_scan_range = range(min(10, len(pages_data)))
-            preliminary_toc_entries = _extract_toc_entries_from_pages(pages_data, prelim_scan_range, 0)
+            preliminary_toc_entries = _extract_toc_entries_from_pages(
+                pages_data, prelim_scan_range, 0
+            )
 
         if preliminary_toc_entries:
-            preliminary_toc_entries.sort(key=lambda x: x[0]) # Sort by parsed page number
-            if preliminary_toc_entries[0][0] < 1000: # Check if it's a real page number
+            preliminary_toc_entries.sort(
+                key=lambda x: x[0]
+            )  # Sort by parsed page number
+            if preliminary_toc_entries[0][0] < 1000:  # Check if it's a real page number
                 parsed_first_page_from_toc = preliminary_toc_entries[0][0]
                 page_offset = first_chapter_page_number - parsed_first_page_from_toc
-                print(f"User specified first chapter actual page: {first_chapter_page_number}.")
-                print(f"Detected first chapter page in TOC text: {parsed_first_page_from_toc}.")
+                print(
+                    f"User specified first chapter actual page: {first_chapter_page_number}."
+                )
+                print(
+                    f"Detected first chapter page in TOC text: {parsed_first_page_from_toc}."
+                )
                 print(f"Calculated page_offset: {page_offset}")
             else:
-                print(f"Warning: Could not determine a reliable first chapter page from TOC text to calculate offset. Using offset 0.")
+                print(
+                    f"Warning: Could not determine a reliable first chapter page from TOC text to calculate offset. Using offset 0."
+                )
         else:
-            print(f"Warning: No TOC entries found in preliminary scan to calculate offset. Using offset 0.")
+            print(
+                f"Warning: No TOC entries found in preliminary scan to calculate offset. Using offset 0."
+            )
 
     # Actual TOC extraction using the determined page_offset
     toc_entries = []
     if contents_page_idx is not None:
-        print(f"Attempting TOC extraction from CONTENTS page (index {contents_page_idx}) with offset {page_offset}.")
-        toc_entries = _extract_toc_from_contents_page(pages_data, contents_page_idx, page_offset)
+        print(
+            f"Attempting TOC extraction from CONTENTS page (index {contents_page_idx}) with offset {page_offset}."
+        )
+        toc_entries = _extract_toc_from_contents_page(
+            pages_data, contents_page_idx, page_offset
+        )
 
     if not toc_entries:
-        print(f"TOC not found or empty on CONTENTS page. Attempting regex-based TOC extraction with offset {page_offset}.")
+        print(
+            f"TOC not found or empty on CONTENTS page. Attempting regex-based TOC extraction with offset {page_offset}."
+        )
         # If we found a contents page, focus on that and the next few pages for regex scan
         content_page_range = range(len(pages_data))
         if contents_page_idx is not None:
@@ -261,7 +288,9 @@ def _find_toc_entries(pages_data: List[Dict[str, Any]], first_chapter_page_numbe
             print(f"Searching for TOC entries in pages {content_page_range}")
 
         # Extract TOC entries from the pages
-        toc_entries = _extract_toc_entries_from_pages(pages_data, content_page_range, page_offset)
+        toc_entries = _extract_toc_entries_from_pages(
+            pages_data, content_page_range, page_offset
+        )
 
     # Sort TOC entries by the referenced page number
     toc_entries.sort(key=lambda x: x[0])
@@ -397,10 +426,10 @@ def _write_epub_file(book: epub.EpubBook, epub_path: str):
 def olmocr_to_epub(
     jsonl_path: str,
     epub_path: str,
+    first_chapter_page_number: int,
     book_title: str = "Converted Ebook",
     book_author: str = "Unknown Author",
     language: str = "en",
-    first_chapter_page_number: Optional[int] = None,
 ):
     """
     Converts a JSONL file containing OCR results (from olmocr) to EPUB.
