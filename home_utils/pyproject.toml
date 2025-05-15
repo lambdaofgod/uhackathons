@@ -3,10 +3,11 @@ name = "home_utils"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "audiblez>=0.4.9",
+    "fastapi>=0.115.12",
     "fire>=0.7.0",
-    "pillow>=11.2.1",
-    "wxpython>=4.2.3",
+    "olmocr>=0.1.60",
+    "openai>=1.78.1",
 ]
