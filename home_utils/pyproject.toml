@@ -1,0 +1,12 @@
+[project]
+name = "home_utils"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "audiblez>=0.4.9",
+    "fire>=0.7.0",
+    "pillow>=11.2.1",
+    "wxpython>=4.2.3",
+]
