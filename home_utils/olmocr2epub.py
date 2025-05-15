@@ -375,9 +375,11 @@ def _add_chapters_to_book(
         start_page = max(start_page, current_page)
 
         # Collect text for this chapter's pages
-        chapter_text = "\n\n".join(
-            page_text_map.get(p, "") for p in range(start_page, end_page + 1)
-        )
+        # Join with a space to allow paragraphs to flow across page breaks.
+        # Newlines within individual page texts will handle actual paragraph breaks.
+        chapter_texts_for_pages = [page_text_map.get(p, "") for p in range(start_page, end_page + 1)]
+        chapter_text = " ".join(text.strip() for text in chapter_texts_for_pages if text.strip())
+
 
         if chapter_text.strip():  # Only create chapter if there's content
             chapter_title = f"{roman_num}. {title}" if roman_num else title
@@ -396,9 +398,9 @@ def _add_chapters_to_book(
 
     # Add any remaining pages after the last identified chapter as an appendix or continuation
     if current_page <= max_page_num:
-        remaining_text = "\n\n".join(
-            page_text_map.get(p, "") for p in range(current_page, max_page_num + 1)
-        )
+        remaining_page_texts = [page_text_map.get(p, "") for p in range(current_page, max_page_num + 1)]
+        remaining_text = " ".join(text.strip() for text in remaining_page_texts if text.strip())
+
         if remaining_text.strip():
             chapter_title = "Remaining Content"
             chapter_filename = f"chap_{current_page:04d}_remaining.xhtml"
