@@ -54,7 +54,7 @@ def _find_contents_page(pages_data: List[Dict[str, Any]]) -> Optional[int]:
 
 
 def _extract_toc_entries_from_pages(
-    pages_data: List[Dict[str, Any]], content_page_range: range
+    pages_data: List[Dict[str, Any]], content_page_range: range, page_offset: int
 ) -> List[Tuple[int, str, str]]:
     """Extract TOC entries from the specified range of pages."""
     toc_entries = []
@@ -139,7 +139,7 @@ def _print_toc_entries(toc_entries: List[Tuple[int, str, str]]):
 
 
 def _extract_toc_from_contents_page(
-    pages_data: List[Dict[str, Any]], contents_page_idx: int
+    pages_data: List[Dict[str, Any]], contents_page_idx: int, page_offset: int
 ) -> List[Tuple[int, str, str]]:
     """Extract TOC directly from the CONTENTS page using line-by-line parsing."""
     if contents_page_idx is None or contents_page_idx >= len(pages_data):
@@ -199,7 +199,7 @@ def _extract_toc_from_contents_page(
     return toc_entries
 
 
-def _find_toc_entries(pages_data: List[Dict[str, Any]]) -> List[Tuple[int, str, str]]:
+def _find_toc_entries(pages_data: List[Dict[str, Any]], page_offset: int) -> List[Tuple[int, str, str]]:
     """Finds TOC entries using regex and sorts them by page reference."""
     # First, look for the contents page
     contents_page_idx = _find_contents_page(pages_data)
@@ -208,7 +208,7 @@ def _find_toc_entries(pages_data: List[Dict[str, Any]]) -> List[Tuple[int, str, 
 
     # Try direct extraction from contents page first
     if contents_page_idx is not None:
-        toc_entries = _extract_toc_from_contents_page(pages_data, contents_page_idx)
+        toc_entries = _extract_toc_from_contents_page(pages_data, contents_page_idx, page_offset)
 
     # If that didn't work, try the regex approach
     if not toc_entries:
@@ -362,6 +362,7 @@ def olmocr_to_epub(
     book_title: str = "Converted Ebook",
     book_author: str = "Unknown Author",
     language: str = "en",
+    page_offset: int = 0,
 ):
     """
     Converts a JSONL file containing OCR results (from olmocr) to EPUB.
@@ -375,6 +376,10 @@ def olmocr_to_epub(
         book_title (str): Title for the EPUB metadata.
         book_author (str): Author for the EPUB metadata.
         language (str): Language code (e.g., 'en', 'de') for EPUB metadata.
+        page_offset (int): Offset to add to page numbers extracted from TOC.
+                           Use this if printed page numbers in TOC differ from PDF page numbers.
+                           E.g., if TOC says Chapter 1 is on page 13, but it's actually PDF page 11,
+                           use page_offset=-2.
     """
     print(f"Starting conversion of '{jsonl_path}' to '{epub_path}'...")
 
@@ -392,7 +397,7 @@ def olmocr_to_epub(
     page_text_map = {page["page_num"]: page["text"] for page in pages_data}
 
     # 2. Find TOC entries
-    toc_entries = _find_toc_entries(pages_data)
+    toc_entries = _find_toc_entries(pages_data, page_offset)
 
     # 3. Create EPUB book and add chapters
     book = _create_epub_book(book_title, book_author, language)
