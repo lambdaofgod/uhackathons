@@ -81,16 +81,20 @@ def _extract_toc_entries_from_pages(
             title = match.group(2).strip()
 
             # Page reference might not be captured
+            page_ref_str = match.group(3)
             page_ref = None
-            if match.group(3):
+
+            if page_ref_str:  # If a page number string is present in the regex match
                 try:
-                    page_ref = int(match.group(3))
+                    page_ref = int(page_ref_str)
+                    page_ref += page_offset  # Apply offset
                 except ValueError:
                     print(
-                        f"Warning: Could not parse page number '{match.group(3)}' from TOC entry on page {page_num}."
+                        f"Warning: Could not parse page number '{page_ref_str}' from TOC entry on page {page_num}."
                     )
-
-            # If no page reference, use sequential ordering based on appearance
+                    # page_ref remains None
+            
+            # If no page reference in text OR parsing failed
             if page_ref is None:
                 # Use a high starting page number if we don't have actual page refs
                 # This ensures these entries come after any with real page numbers
@@ -182,17 +186,19 @@ def _extract_toc_from_contents_page(
             if match:
                 roman_num = match.group(1)
                 title = match.group(2).strip()  # Group 2 is now the more flexible title
+                page_ref_str = match.group(3)
                 page_ref = None
 
-                if match.group(3):
+                if page_ref_str:  # If a page number string is present in the regex match
                     try:
-                        page_ref = int(match.group(3))
+                        page_ref = int(page_ref_str)
+                        page_ref += page_offset  # Apply offset to parsed page number
                     except ValueError:
                         print(f"Warning: Could not parse page number from '{line}'")
-                        page_ref = None
-
-                if page_ref is None:
-                    page_ref = 1000 + len(toc_entries)
+                        # page_ref remains None
+                
+                if page_ref is None:  # If no page number in text OR parsing failed
+                    page_ref = 1000 + len(toc_entries) # Assign artificial page number
 
                 toc_entries.append((page_ref, roman_num, title))
 
@@ -223,7 +229,7 @@ def _find_toc_entries(pages_data: List[Dict[str, Any]], page_offset: int) -> Lis
             print(f"Searching for TOC entries in pages {content_page_range}")
 
         # Extract TOC entries from the pages
-        toc_entries = _extract_toc_entries_from_pages(pages_data, content_page_range)
+        toc_entries = _extract_toc_entries_from_pages(pages_data, content_page_range, page_offset)
 
     # Sort TOC entries by the referenced page number
     toc_entries.sort(key=lambda x: x[0])
