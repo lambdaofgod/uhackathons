@@ -37,25 +37,18 @@ def _read_jsonl_data(jsonl_path: str) -> Optional[Tuple[List[Dict[str, Any]], in
         print(f"An error occurred while reading JSONL: {e}")
         return None
 
-def _find_toc_entries(pages_data: List[Dict[str, Any]]) -> List[Tuple[int, str, str]]:
-    """Finds TOC entries using regex and sorts them by page reference."""
-    toc_entries = []
-    
-    # First, look for the contents page
-    contents_page = None
+def _find_contents_page(pages_data: List[Dict[str, Any]]) -> Optional[int]:
+    """Find the page number that contains the table of contents."""
     for page_info in pages_data:
         text = page_info.get('text', '')
         if text and 'CONTENTS' in text:
-            contents_page = page_info['page_num']
-            break
+            return page_info['page_num']
+    return None
+
+def _extract_toc_entries_from_pages(pages_data: List[Dict[str, Any]], content_page_range: range) -> List[Tuple[int, str, str]]:
+    """Extract TOC entries from the specified range of pages."""
+    toc_entries = []
     
-    # If we found a contents page, focus on that and the next few pages
-    content_page_range = range(len(pages_data))
-    if contents_page is not None:
-        # Look at the contents page and the next 3 pages (typical for TOC)
-        content_page_range = range(contents_page - 1, min(contents_page + 3, len(pages_data)))
-    
-    # Search for chapter entries
     for i in content_page_range:
         if i < 0 or i >= len(pages_data):
             continue
@@ -87,27 +80,65 @@ def _find_toc_entries(pages_data: List[Dict[str, Any]]) -> List[Tuple[int, str, 
                 page_ref = 1000 + len(toc_entries)
                 
             toc_entries.append((page_ref, roman_num, title))
+    
+    return toc_entries
+
+def _adjust_toc_page_references(toc_entries: List[Tuple[int, str, str]], pages_data: List[Dict[str, Any]]) -> List[Tuple[int, str, str]]:
+    """Adjust page references for TOC entries that don't have real page numbers."""
+    if not toc_entries or toc_entries[0][0] < 1000:
+        return toc_entries
+        
+    # Find the first real page in the data
+    first_page = min(page['page_num'] for page in pages_data if page.get('text'))
+    adjusted_entries = []
+    
+    # Space chapters evenly throughout the book
+    total_pages = max(page['page_num'] for page in pages_data)
+    pages_per_chapter = total_pages // (len(toc_entries) + 1)
+    
+    for i, (_, roman_num, title) in enumerate(toc_entries):
+        page_ref = first_page + (i * pages_per_chapter)
+        adjusted_entries.append((page_ref, roman_num, title))
+        
+    print(f"Adjusted chapter page references for {len(adjusted_entries)} entries.")
+    return adjusted_entries
+
+def _print_toc_entries(toc_entries: List[Tuple[int, str, str]]):
+    """Print the table of contents entries."""
+    if not toc_entries:
+        print("No table of contents entries found.")
+        return
+        
+    print("\nTable of Contents:")
+    print("-----------------")
+    for page_ref, roman_num, title in toc_entries:
+        print(f"{roman_num}. {title} (Page {page_ref})")
+    print("-----------------\n")
+
+def _find_toc_entries(pages_data: List[Dict[str, Any]]) -> List[Tuple[int, str, str]]:
+    """Finds TOC entries using regex and sorts them by page reference."""
+    # First, look for the contents page
+    contents_page = _find_contents_page(pages_data)
+    
+    # If we found a contents page, focus on that and the next few pages
+    content_page_range = range(len(pages_data))
+    if contents_page is not None:
+        # Look at the contents page and the next 3 pages (typical for TOC)
+        content_page_range = range(contents_page - 1, min(contents_page + 3, len(pages_data)))
+    
+    # Extract TOC entries from the pages
+    toc_entries = _extract_toc_entries_from_pages(pages_data, content_page_range)
 
     # Sort TOC entries by the referenced page number
     toc_entries.sort(key=lambda x: x[0])
     print(f"Found {len(toc_entries)} potential chapter entries matching the regex.")
     
-    # If we have entries with artificial page numbers (1000+), adjust them
+    # Adjust page references if needed
     if toc_entries and toc_entries[0][0] >= 1000:
-        # Find the first real page in the data
-        first_page = min(page['page_num'] for page in pages_data if page.get('text'))
-        adjusted_entries = []
-        
-        # Space chapters evenly throughout the book
-        total_pages = max(page['page_num'] for page in pages_data)
-        pages_per_chapter = total_pages // (len(toc_entries) + 1)
-        
-        for i, (_, roman_num, title) in enumerate(toc_entries):
-            page_ref = first_page + (i * pages_per_chapter)
-            adjusted_entries.append((page_ref, roman_num, title))
-            
-        toc_entries = adjusted_entries
-        print(f"Adjusted chapter page references for {len(toc_entries)} entries.")
+        toc_entries = _adjust_toc_page_references(toc_entries, pages_data)
+    
+    # Print the TOC entries
+    _print_toc_entries(toc_entries)
     
     return toc_entries
 
