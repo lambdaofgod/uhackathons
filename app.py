@@ -1,17 +1,14 @@
 import gradio as gr
-
-def process_file(jsonl_file, time_granularity):
-    # Placeholder for file processing and visualization logic
-    # This function will be implemented later
-    if jsonl_file is not None:
-        file_path = jsonl_file.name
-        # In a real app, you would read and process the file here
-        # For now, just return a message
-        return f"File '{file_path}' uploaded. Time granularity: {time_granularity}. Visualization will appear here."
-    return "Please upload a file and select time granularity."
+# Assuming app.py and data_loading.py are in the same directory 'textmap'
+# and you run the app from the parent directory of 'textmap' (e.g., python -m textmap.app)
+# or from within 'textmap' (e.g., python app.py)
+from .data_loading import load_and_preprocess_data
 
 with gr.Blocks() as demo:
     gr.Markdown("# Dynamic Topic Modeling Visualization")
+
+    # Gradio State to store the loaded and preprocessed DataFrame
+    df_state = gr.State(None)
 
     with gr.Row():
         with gr.Column(scale=1, min_width=300):  # Left sidebar
@@ -29,13 +26,25 @@ with gr.Blocks() as demo:
 
         with gr.Column(scale=3):  # Main content area
             gr.Markdown("## Topic Visualization")
-            output_display = gr.Textbox(label="Status / Visualization Placeholder", interactive=False) # Placeholder for visualization
+            output_display = gr.Textbox(label="Status", interactive=False) # Placeholder for status messages
+            # Optional: A DataFrame component to display parts of the loaded data for debugging
+            # df_debug_output = gr.DataFrame(label="Loaded Data Sample")
+
 
     submit_button.click(
-        fn=process_file,
+        fn=load_and_preprocess_data,
         inputs=[file_input, granularity_input],
-        outputs=output_display
+        # load_and_preprocess_data returns (status_message, df_or_none)
+        # We map these to output_display and df_state respectively
+        outputs=[output_display, df_state]
+        # If using df_debug_output, you might need an intermediate function
+        # or adjust load_and_preprocess_data to return a sample for display
+        # For now, df_state will hold the full DataFrame.
     )
 
 if __name__ == "__main__":
+    # If running `python textmap/app.py` directly from the project root,
+    # you might need to adjust Python's path for the import '.data_loading' to work,
+    # or change the import to 'data_loading' and ensure 'textmap' is in PYTHONPATH.
+    # A common way to run Gradio apps in packages is `python -m textmap.app` from the parent directory.
     demo.launch()
