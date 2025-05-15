@@ -76,18 +76,18 @@ def _create_epub_chapter(title: str, filename: str, content: str, language: str)
     """Creates a single EpubHtml chapter object."""
     epub_chapter = epub.EpubHtml(title=title, file_name=filename, lang=language)
     # Simple paragraph formatting
-    html_content = f"""<?xml version='1.0' encoding='utf-8'?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
-<head>
-    <title>{title}</title>
-    <meta charset="utf-8" />
-</head>
-<body>
-    <h1>{title}</h1>
-    <p>{content.replace('\n\n', '</p><p>').replace('\n', '<br/>')}</p>
-</body>
-</html>"""
+    html_content = "<?xml version='1.0' encoding='utf-8'?>\n"
+    html_content += "<!DOCTYPE html>\n"
+    html_content += "<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\">\n"
+    html_content += "<head>\n"
+    html_content += "    <title>" + title + "</title>\n"
+    html_content += "    <meta charset=\"utf-8\" />\n"
+    html_content += "</head>\n"
+    html_content += "<body>\n"
+    html_content += "    <h1>" + title + "</h1>\n"
+    html_content += "    <p>" + content.replace('\n\n', '</p><p>').replace('\n', '<br/>') + "</p>\n"
+    html_content += "</body>\n"
+    html_content += "</html>"
     epub_chapter.content = html_content.encode("utf-8")
     return epub_chapter
 
