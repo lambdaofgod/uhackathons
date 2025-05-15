@@ -6,8 +6,8 @@ import fire
 from typing import List, Dict, Any, Tuple, Optional
 
 # Regex to match chapter entries in the table of contents
-# Matches patterns like "I. NAPOLEON'S SUCCESSORS 13" or "XXI. JEFFERSONIAN DEMOCRACY"
-TOC_REGEX = r"([IVXLCDM]+)\.\s+([A-Z][A-Z\s'-]+)(?:\s+(\d+))?"
+# Matches patterns like "I. NAPOLEON'S SUCCESSORS 13" or "CHAPTER\nI. NAPOLEON'S SUCCESSORS 13"
+TOC_REGEX = r"(?:CHAPTER\s*\n)?([IVXLCDM]+)\.[\s\n]+([A-Z][A-Z\s'-]+)(?:\s+(\d+))?"
 
 
 def _read_jsonl_data(jsonl_path: str) -> Optional[Tuple[List[Dict[str, Any]], int]]:
@@ -46,10 +46,11 @@ def _read_jsonl_data(jsonl_path: str) -> Optional[Tuple[List[Dict[str, Any]], in
 
 def _find_contents_page(pages_data: List[Dict[str, Any]]) -> Optional[int]:
     """Find the page number that contains the table of contents."""
-    for page_info in pages_data:
+    for i, page_info in enumerate(pages_data):
         text = page_info.get("text", "")
         if text and "CONTENTS" in text:
-            return page_info["page_num"]
+            print(f"Found CONTENTS on page {page_info['page_num']}")
+            return i  # Return the index, not the page number
     return None
 
 
@@ -70,19 +71,30 @@ def _extract_toc_entries_from_pages(
         if not text:
             continue
 
+        print(f"Searching page {page_num} for TOC entries")
+        
         # Use finditer to find all non-overlapping matches on the page
-        for match in re.finditer(TOC_REGEX, text):
+        matches = list(re.finditer(TOC_REGEX, text))
+        print(f"Found {len(matches)} potential matches on page {page_num}")
+        
+        for match in matches:
             roman_num = match.group(1)
             title = match.group(2).strip()
+            
+            # Print the full match for debugging
+            print(f"Match: '{match.group(0)}'")
+            print(f"  Roman numeral: '{roman_num}'")
+            print(f"  Title: '{title}'")
 
             # Page reference might not be captured
             page_ref = None
             if match.group(3):
                 try:
                     page_ref = int(match.group(3))
+                    print(f"  Page reference: {page_ref}")
                 except ValueError:
                     print(
-                        f"Warning: Could not parse page number from TOC entry on page {page_num}. Using sequential ordering."
+                        f"Warning: Could not parse page number '{match.group(3)}' from TOC entry on page {page_num}."
                     )
 
             # If no page reference, use sequential ordering based on appearance
@@ -90,6 +102,7 @@ def _extract_toc_entries_from_pages(
                 # Use a high starting page number if we don't have actual page refs
                 # This ensures these entries come after any with real page numbers
                 page_ref = 1000 + len(toc_entries)
+                print(f"  Using artificial page reference: {page_ref}")
 
             toc_entries.append((page_ref, roman_num, title))
 
@@ -132,24 +145,92 @@ def _print_toc_entries(toc_entries: List[Tuple[int, str, str]]):
     print("-----------------\n")
 
 
+def _extract_toc_from_contents_page(pages_data: List[Dict[str, Any]], contents_page_idx: int) -> List[Tuple[int, str, str]]:
+    """Extract TOC directly from the CONTENTS page using line-by-line parsing."""
+    if contents_page_idx is None or contents_page_idx >= len(pages_data):
+        return []
+        
+    # Get the contents page and possibly the next page
+    contents_pages = []
+    for i in range(contents_page_idx, min(contents_page_idx + 2, len(pages_data))):
+        if pages_data[i].get("text"):
+            contents_pages.append(pages_data[i])
+    
+    if not contents_pages:
+        return []
+    
+    toc_entries = []
+    
+    # Process each contents page
+    for page_info in contents_pages:
+        text = page_info.get("text", "")
+        lines = text.split('\n')
+        
+        # Skip until we find the actual contents (after the "CONTENTS" header)
+        start_idx = 0
+        for i, line in enumerate(lines):
+            if "CONTENTS" in line:
+                start_idx = i + 1
+                break
+        
+        # Process each line after "CONTENTS"
+        for i in range(start_idx, len(lines)):
+            line = lines[i].strip()
+            if not line:
+                continue
+                
+            # Look for Roman numeral followed by title and page number
+            # Pattern: "I. NAPOLEON'S SUCCESSORS 13"
+            match = re.match(r"([IVXLCDM]+)\.\s+([A-Z][A-Z\s'-]+)(?:\s+(\d+))?", line)
+            if match:
+                roman_num = match.group(1)
+                title = match.group(2).strip()
+                page_ref = None
+                
+                if match.group(3):
+                    try:
+                        page_ref = int(match.group(3))
+                    except ValueError:
+                        print(f"Warning: Could not parse page number from '{line}'")
+                        page_ref = None
+                
+                if page_ref is None:
+                    page_ref = 1000 + len(toc_entries)
+                    
+                toc_entries.append((page_ref, roman_num, title))
+                print(f"Found TOC entry: {roman_num}. {title} (Page {page_ref})")
+    
+    return toc_entries
+
 def _find_toc_entries(pages_data: List[Dict[str, Any]]) -> List[Tuple[int, str, str]]:
     """Finds TOC entries using regex and sorts them by page reference."""
     # First, look for the contents page
-    contents_page = _find_contents_page(pages_data)
+    contents_page_idx = _find_contents_page(pages_data)
+    
+    toc_entries = []
+    
+    # Try direct extraction from contents page first
+    if contents_page_idx is not None:
+        toc_entries = _extract_toc_from_contents_page(pages_data, contents_page_idx)
+    
+    # If that didn't work, try the regex approach
+    if not toc_entries:
+        # If we found a contents page, focus on that and the next few pages
+        content_page_range = range(len(pages_data))
+        if contents_page_idx is not None:
+            # Look at the contents page and the next 3 pages (typical for TOC)
+            content_page_range = range(
+                max(0, contents_page_idx - 1), min(contents_page_idx + 3, len(pages_data))
+            )
+            print(f"Searching for TOC entries in pages {content_page_range}")
 
-    # If we found a contents page, focus on that and the next few pages
-    content_page_range = range(len(pages_data))
-    if contents_page is not None:
-        # Look at the contents page and the next 3 pages (typical for TOC)
-        content_page_range = range(
-            contents_page - 1, min(contents_page + 3, len(pages_data))
-        )
+        # Extract TOC entries from the pages
+        toc_entries = _extract_toc_entries_from_pages(pages_data, content_page_range)
 
-    # Extract TOC entries from the pages
-    toc_entries = _extract_toc_entries_from_pages(pages_data, content_page_range)
-
-    print("found table of contents")
-    print(toc_entries)
+    print("\nFound table of contents entries:")
+    for page_ref, roman_num, title in toc_entries:
+        print(f"  {roman_num}. {title} (Page {page_ref})")
+        
     # Sort TOC entries by the referenced page number
     toc_entries.sort(key=lambda x: x[0])
     print(f"Found {len(toc_entries)} potential chapter entries matching the regex.")
