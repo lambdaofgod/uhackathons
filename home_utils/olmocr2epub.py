@@ -5,9 +5,9 @@ from ebooklib import epub
 import fire
 from typing import List, Dict, Any, Tuple, Optional
 
-# Regex based on line 7 of the provided JSONL: "CHAPTER\nI. NAPOLEON'S SUCCESSORS 13"
-# Captures Roman numeral, Title, and Page Number reference.
-TOC_REGEX = r"CHAPTER\n([IVXLCDM]+)\.\s+(.+?)\s+(\d+)"
+# Regex to match chapter entries in the table of contents
+# Matches patterns like "I. NAPOLEON'S SUCCESSORS 13" or "XXI. JEFFERSONIAN DEMOCRACY"
+TOC_REGEX = r"([IVXLCDM]+)\.\s+([A-Z][A-Z\s'-]+)(?:\s+(\d+))?"
 
 def _read_jsonl_data(jsonl_path: str) -> Optional[Tuple[List[Dict[str, Any]], int]]:
     """Reads JSONL file, extracts page data, sorts it, and returns pages and max page num."""
@@ -40,24 +40,75 @@ def _read_jsonl_data(jsonl_path: str) -> Optional[Tuple[List[Dict[str, Any]], in
 def _find_toc_entries(pages_data: List[Dict[str, Any]]) -> List[Tuple[int, str, str]]:
     """Finds TOC entries using regex and sorts them by page reference."""
     toc_entries = []
+    
+    # First, look for the contents page
+    contents_page = None
     for page_info in pages_data:
+        text = page_info.get('text', '')
+        if text and 'CONTENTS' in text:
+            contents_page = page_info['page_num']
+            break
+    
+    # If we found a contents page, focus on that and the next few pages
+    content_page_range = range(len(pages_data))
+    if contents_page is not None:
+        # Look at the contents page and the next 3 pages (typical for TOC)
+        content_page_range = range(contents_page - 1, min(contents_page + 3, len(pages_data)))
+    
+    # Search for chapter entries
+    for i in content_page_range:
+        if i < 0 or i >= len(pages_data):
+            continue
+            
+        page_info = pages_data[i]
         page_num = page_info['page_num']
-        text = page_info['text']
-        if text: # Only search if text is not empty
-            # Use finditer to find all non-overlapping matches on the page
-            for match in re.finditer(TOC_REGEX, text):
-                roman_num = match.group(1)
-                title = match.group(2).strip()
-                page_ref_str = match.group(3)
+        text = page_info.get('text', '')
+        
+        if not text:
+            continue
+            
+        # Use finditer to find all non-overlapping matches on the page
+        for match in re.finditer(TOC_REGEX, text):
+            roman_num = match.group(1)
+            title = match.group(2).strip()
+            
+            # Page reference might not be captured
+            page_ref = None
+            if match.group(3):
                 try:
-                    page_ref = int(page_ref_str)
-                    toc_entries.append((page_ref, roman_num, title))
+                    page_ref = int(match.group(3))
                 except ValueError:
-                    print(f"Warning: Could not parse page number '{page_ref_str}' from TOC entry on page {page_num}. Skipping entry.")
+                    print(f"Warning: Could not parse page number from TOC entry on page {page_num}. Using sequential ordering.")
+            
+            # If no page reference, use sequential ordering based on appearance
+            if page_ref is None:
+                # Use a high starting page number if we don't have actual page refs
+                # This ensures these entries come after any with real page numbers
+                page_ref = 1000 + len(toc_entries)
+                
+            toc_entries.append((page_ref, roman_num, title))
 
     # Sort TOC entries by the referenced page number
     toc_entries.sort(key=lambda x: x[0])
     print(f"Found {len(toc_entries)} potential chapter entries matching the regex.")
+    
+    # If we have entries with artificial page numbers (1000+), adjust them
+    if toc_entries and toc_entries[0][0] >= 1000:
+        # Find the first real page in the data
+        first_page = min(page['page_num'] for page in pages_data if page.get('text'))
+        adjusted_entries = []
+        
+        # Space chapters evenly throughout the book
+        total_pages = max(page['page_num'] for page in pages_data)
+        pages_per_chapter = total_pages // (len(toc_entries) + 1)
+        
+        for i, (_, roman_num, title) in enumerate(toc_entries):
+            page_ref = first_page + (i * pages_per_chapter)
+            adjusted_entries.append((page_ref, roman_num, title))
+            
+        toc_entries = adjusted_entries
+        print(f"Adjusted chapter page references for {len(toc_entries)} entries.")
+    
     return toc_entries
 
 def _create_epub_book(book_title: str, book_author: str, language: str) -> epub.EpubBook:
