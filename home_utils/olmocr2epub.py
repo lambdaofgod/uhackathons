@@ -97,33 +97,11 @@ def olmocr_to_epub(
     epub_chapters = []
     current_page = 1 # Start from the first page
 
-    # Add Front Matter chapter if there are pages before the first TOC entry
-    if toc_entries and toc_entries[0][0] > 1:
-        front_matter_end_page = toc_entries[0][0] - 1
-        front_matter_text = "\n\n".join(page_text_map.get(p, "") for p in range(current_page, front_matter_end_page + 1))
-        if front_matter_text.strip(): # Only create if there's content
-            chapter_title = "Front Matter"
-            chapter_filename = "chap_front_matter.xhtml"
-            epub_chapter = epub.EpubHtml(title=chapter_title, file_name=chapter_filename, lang=language)
-            html_content = f"""<?xml version='1.0' encoding='utf-8'?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
-<head>
-    <title>{chapter_title}</title>
-    <meta charset="utf-8" />
-</head>
-<body>
-    <h1>{chapter_title}</h1>
-    <p>{front_matter_text.replace('\n\n', '</p><p>').replace('\n', '<br/>')}</p>
-</body>
-</html>"""
-            epub_chapter.content = html_content.encode("utf-8")
-            book.add_item(epub_chapter)
-            epub_chapters.append(epub_chapter)
-            print(f"Created chapter: {chapter_title} (Pages {current_page}-{front_matter_end_page})")
-        current_page = toc_entries[0][0] # Move current page pointer to the start of the first chapter
-
     # Add chapters based on TOC entries
+    # If TOC entries exist, start processing from the page of the first entry
+    if toc_entries:
+        current_page = toc_entries[0][0]
+
     for i, (page_ref, roman_num, title) in enumerate(toc_entries):
         start_page = page_ref
         end_page = max_page_num # Default end is the last page
