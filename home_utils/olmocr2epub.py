@@ -181,10 +181,12 @@ def _extract_toc_from_contents_page(pages_data: List[Dict[str, Any]], contents_p
                 
             # Look for Roman numeral followed by title and page number
             # Pattern: "I. NAPOLEON'S SUCCESSORS 13"
-            match = re.match(r"([IVXLCDM]+)\.\s+([A-Z][A-Z\s'-]+)(?:\s+(\d+))?", line)
+            # Title part (.+?) is non-greedy to allow page number matching at the end.
+            # Page number is optional (?:\s+(\d+))? and anchored to end of line \s*$.
+            match = re.match(r"([IVXLCDM]+)\.\s+(.+?)(?:\s+(\d+))?\s*$", line)
             if match:
                 roman_num = match.group(1)
-                title = match.group(2).strip()
+                title = match.group(2).strip() # Group 2 is now the more flexible title
                 page_ref = None
                 
                 if match.group(3):
