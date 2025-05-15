@@ -1,0 +1,109 @@
+#+title: Olmocr
+
+
+* Prerequisites
+
+** Mac
+
+#+BEGIN_SRC bash :exports both :async
+brew install poppler
+#+END_SRC
+
+https://jonathansoma.com/words/olmocr-on-macos-with-lm-studio.html
+
+
+* Running olmOCR with LMStudio
+
+#+BEGIN_SRC python :session olmocr.org  :exports both
+from openai import OpenAI
+import asyncio
+
+client = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio", timeout=500)
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session olmocr.org  :exports both
+import pathlib
+
+list(pathlib.Path("audiobooks").glob("*"))[-3]
+#+END_SRC
+
+#+RESULTS:
+: audiobooks/freedom_and_organization_audiobook
+
+
+#+BEGIN_SRC python :session olmocr.org  :exports both :async
+import json
+from pathlib import Path
+from tqdm import trange
+
+from pypdf import PdfReader
+from olmocr.pipeline import build_page_query, build_dolma_document, PageResult
+from olmocr.prompts import PageResponse
+
+async def process_page(filename, page_num):
+    query = await build_page_query(filename,
+                                   page=page_num,
+                                   target_longest_image_dim=1024,
+                                   target_anchor_text_len=6000)
+    query['model'] = 'allenai_olmocr-7b-0225-preview'
+    query['max_tokens'] = 8096
+    response = client.chat.completions.create(**query)
+    model_obj = json.loads(response.choices[0].message.content)
+    #page_response = PageResponse(**model_obj)
+
+    return dict(
+        filename=filename,
+        page_num=page_num,
+        page_response=model_obj,
+        input_tokens=response.usage.prompt_tokens,
+        output_tokens=response.usage.completion_tokens,
+        is_fallback=False,
+    )
+
+
+filename = "audiobooks/freedom_and_organization.pdf"
+
+reader = PdfReader(filename)
+num_pages = 40 #reader.get_num_pages()
+results = []
+
+
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session olmocr.org  :exports both
+
+with open("audiobooks/freedom_and_organization.part.jsonl", "w") as f:
+    for page_num in trange(1, num_pages + 1):
+        result = asyncio.run(process_page(filename, page_num))
+        results.append(result)
+        f.write(json.dumps(result))
+#+END_SRC
+
+#+BEGIN_SRC python :session olmocr.org  :exports both :async
+
+num_pages = reader.get_num_pages()
+
+with open("audiobooks/freedom_and_organization.jsonl", "a") as f:
+    for page_num in trange(1, num_pages + 1):
+        result = asyncio.run(process_page(filename, page_num))
+        results.append(result)
+        f.write(json.dumps(result))
+#+END_SRC
+
+#+RESULTS:
+: /var/folders/t7/9zd9yqf17_zbfq2hwm8tv9ym0000gn/T/babel-565FpG/python-Tshlj4
+
+#+BEGIN_SRC python :session olmocr.org  :exports both
+import lmstudio as lms
+
+all_loaded_models = lms.list_loaded_models()
+llm_only = lms.list_loaded_models("v1")
+#+END_SRC
+
+#+RESULTS:
