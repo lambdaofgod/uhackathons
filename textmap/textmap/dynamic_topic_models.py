@@ -1,170 +1,246 @@
 import pandas as pd
+import numpy as np
 from gensim.models.ldaseqmodel import LdaSeqModel
-from typing import List
+from gensim.corpora import Dictionary
+from typing import List, Dict, Any, Tuple, Optional
 
 class DynamicTopicModel:
     """
     A wrapper for Gensim's LdaSeqModel that provides a scikit-learn-like API.
     """
 
-    def __init__(self, lda_seq_model: LdaSeqModel, text_col: str, period_col: str):
+    def __init__(self, num_topics: int = 10, text_col: str = "text", period_col: str = "period", 
+                 lda_seq_model: Optional[LdaSeqModel] = None, **lda_kwargs):
         """
         Initializes the DynamicTopicModel.
 
         Args:
-            lda_seq_model: An instance of Gensim's LdaSeqModel.
+            num_topics: Number of topics to extract.
             text_col: The name of the column in the DataFrame containing the text data.
             period_col: The name of the column in the DataFrame indicating the time period.
+            lda_seq_model: An optional pre-trained instance of Gensim's LdaSeqModel.
+            **lda_kwargs: Additional keyword arguments to pass to LdaSeqModel.
         """
         self.lda_seq_model = lda_seq_model
         self.text_col = text_col
         self.period_col = period_col
         self.time_slices: List[int] = []
-        self.corpus = None # Will be set in fit
-        self.id2word = None # Will be set in fit
+        self.corpus = None  # Will be set in fit
+        self.id2word = None  # Will be set in fit
+        self.num_topics = num_topics
+        self.lda_kwargs = lda_kwargs
 
-    def fit(self, df: pd.DataFrame):
+    def _preprocess_text(self, texts: List[str]) -> List[List[str]]:
         """
-        Fits the dynamic topic model. 
-        In this wrapper, 'fitting' primarily means preparing the data 
-        (corpus, id2word, time_slices) from the DataFrame for the pre-trained LdaSeqModel.
-        The LdaSeqModel itself is assumed to be already trained.
-
+        Preprocess text data by tokenizing.
+        
         Args:
-            df: A pandas DataFrame with columns for text and period.
+            texts: List of text strings to tokenize.
+            
+        Returns:
+            List of tokenized texts.
         """
-        # Placeholder for actual data preparation logic
-        # This would involve:
-        # 1. Processing df[self.text_col] into a tokenized corpus
-        # 2. Creating a dictionary (id2word) from the corpus
-        # 3. Determining time_slices from df[self.period_col]
-        # For now, we'll assume these are pre-calculated or passed differently
-        # and the LdaSeqModel is already trained with them.
-
-        # Example: Group by period and count documents in each period
-        # This is a common requirement for LdaSeqModel
+        # Simple tokenization - in a real implementation, you might want more sophisticated preprocessing
+        return [text.split() for text in texts]
+    
+    def _create_corpus_and_dictionary(self, df: pd.DataFrame) -> Tuple[List[List[int]], Dictionary]:
+        """
+        Create a corpus and dictionary from the text data.
+        
+        Args:
+            df: DataFrame containing the text data.
+            
+        Returns:
+            Tuple of (corpus, dictionary)
+        """
+        if self.text_col not in df.columns:
+            raise ValueError(f"Text column '{self.text_col}' not found in DataFrame.")
+            
+        # Extract and tokenize texts
+        texts = df[self.text_col].tolist()
+        tokenized_texts = self._preprocess_text(texts)
+        
+        # Create dictionary
+        dictionary = Dictionary(tokenized_texts)
+        
+        # Create corpus (bag of words)
+        corpus = [dictionary.doc2bow(text) for text in tokenized_texts]
+        
+        return corpus, dictionary
+    
+    def _calculate_time_slices(self, df: pd.DataFrame) -> List[int]:
+        """
+        Calculate time slices from the period column.
+        
+        Args:
+            df: DataFrame containing the period data.
+            
+        Returns:
+            List of document counts per time slice.
+        """
         if self.period_col not in df.columns:
             raise ValueError(f"Period column '{self.period_col}' not found in DataFrame.")
         
-        self.time_slices = df.groupby(self.period_col).size().tolist()
+        # Sort DataFrame by period to ensure correct ordering
+        df_sorted = df.sort_values(by=self.period_col)
         
-        # The LdaSeqModel is expected to be trained externally with a corpus and id2word.
-        # If the model is already trained, fit might just validate data or store metadata.
-        # For this example, we'll assume the model is ready and we're just noting the structure.
+        # Count documents per period
+        time_slices = df_sorted.groupby(self.period_col).size().tolist()
+        
+        return time_slices
+    
+    def fit(self, df: pd.DataFrame):
+        """
+        Fits the dynamic topic model by:
+        1. Preprocessing the text data
+        2. Creating a corpus and dictionary
+        3. Calculating time slices
+        4. Training the LdaSeqModel
+
+        Args:
+            df: A pandas DataFrame with columns for text and period.
+            
+        Returns:
+            Self for method chaining.
+        """
+        # Prepare data
+        self.corpus, self.id2word = self._create_corpus_and_dictionary(df)
+        self.time_slices = self._calculate_time_slices(df)
+        
         print(f"Model configured with text_col='{self.text_col}', period_col='{self.period_col}'.")
         print(f"Derived time_slices: {self.time_slices} from the input DataFrame.")
         
-        # In a real scenario, you would process df[self.text_col] to create
-        # self.corpus and self.id2word compatible with self.lda_seq_model
-        # For example:
-        # texts = df[self.text_col].apply(lambda x: x.split()).tolist() # Simple tokenization
-        # self.id2word = Dictionary(texts)
-        # self.corpus = [self.id2word.doc2bow(text) for text in texts]
+        # Train the LdaSeqModel if not provided
+        if self.lda_seq_model is None:
+            try:
+                print(f"Training LdaSeqModel with {self.num_topics} topics...")
+                self.lda_seq_model = LdaSeqModel(
+                    corpus=self.corpus,
+                    id2word=self.id2word,
+                    time_slice=self.time_slices,
+                    num_topics=self.num_topics,
+                    initialize='gensim',
+                    **self.lda_kwargs
+                )
+                print("LdaSeqModel training complete.")
+            except Exception as e:
+                raise RuntimeError(f"Failed to train LdaSeqModel: {e}")
         
-        # For now, we'll just acknowledge the model is "fitted" to the DataFrame structure
         return self
 
-    def transform(self, df: pd.DataFrame):
+    def _transform_document(self, doc: str, time_idx: Optional[int] = None) -> List[Tuple[int, float]]:
+        """
+        Transform a single document into its topic distribution.
+        
+        Args:
+            doc: Text document to transform.
+            time_idx: Optional time index for the document. If provided, uses time-specific topics.
+            
+        Returns:
+            List of (topic_id, probability) tuples.
+        """
+        if self.lda_seq_model is None:
+            raise RuntimeError("The LdaSeqModel is not initialized. Call fit() first or provide a model.")
+            
+        # Tokenize and convert to bag of words
+        tokenized_doc = self._preprocess_text([doc])[0]
+        bow = self.id2word.doc2bow(tokenized_doc)
+        
+        # Get topic distribution
+        if time_idx is not None and 0 <= time_idx < len(self.time_slices):
+            # Use time-specific topics if time_idx is provided
+            topic_dist = self.lda_seq_model.dtm_vis[time_idx][self.lda_seq_model.id2word.doc2bow(tokenized_doc)]
+        else:
+            # Otherwise use the general model
+            topic_dist = self.lda_seq_model[bow]
+            
+        return topic_dist
+    
+    def transform(self, df: pd.DataFrame) -> List[List[Tuple[int, float]]]:
         """
         Transforms the documents in the DataFrame into their topic distributions.
-        This would typically involve using the LdaSeqModel's methods to get
-        topic distributions for new (or existing) documents.
-
+        
         Args:
-            df: A pandas DataFrame with a column for text.
+            df: A pandas DataFrame with a column for text and optionally period.
 
         Returns:
-            A representation of topic distributions for each document.
-            The exact format might vary (e.g., list of topic distributions, DataFrame).
+            A list of topic distributions for each document.
+            Each topic distribution is a list of (topic_id, probability) tuples.
         """
         if self.lda_seq_model is None:
             raise RuntimeError("The LdaSeqModel is not initialized. Call fit() first or provide a model.")
         if self.text_col not in df.columns:
             raise ValueError(f"Text column '{self.text_col}' not found in DataFrame.")
 
-        # Placeholder for actual transformation logic
-        # This would involve:
-        # 1. Processing df[self.text_col] into a BoW representation using self.id2word
-        # 2. Using self.lda_seq_model.dtm_vis(corpus, time_slice_idx) or similar
-        #    or self.lda_seq_model.get_document_topics() if applicable to new docs.
-        #    LdaSeqModel is more about analyzing topics over time for a fixed corpus.
-        #    Transforming new, unseen documents might require a different approach
-        #    or re-training/updating the model.
+        # Check if period column exists for time-specific transformations
+        use_time_info = self.period_col in df.columns
+        
+        # Transform each document
+        topic_distributions = []
+        for idx, row in df.iterrows():
+            doc = row[self.text_col]
+            time_idx = row[self.period_col] if use_time_info else None
+            topic_dist = self._transform_document(doc, time_idx)
+            topic_distributions.append(topic_dist)
+            
+        return topic_distributions
 
-        # For this example, let's assume we want to get topic distributions for the input documents
-        # using the existing id2word from the `fit` stage.
-        # Note: LdaSeqModel itself doesn't have a direct `transform` for new documents
-        # in the same way LDA Mallet or scikit-learn's LDA does.
-        # It's more focused on the evolution of topics in the training corpus.
+    def get_topics(self, time: int = 0, top_terms: int = 10) -> List[Tuple[int, str]]:
+        """
+        Get the topics for a specific time slice.
         
-        # A simplified placeholder:
-        # texts = df[self.text_col].apply(lambda x: x.split()).tolist()
-        # new_corpus = [self.id2word.doc2bow(text) for text in texts]
-        # topic_distributions = [self.lda_seq_model.get_document_topics(bow) for bow in new_corpus]
-        # return topic_distributions
-        
-        print(f"Transform called on DataFrame. (Actual transformation logic to be implemented)")
-        # This is highly dependent on how LdaSeqModel is used.
-        # For now, returning an empty list as a placeholder.
-        return []
+        Args:
+            time: Time slice index.
+            top_terms: Number of top terms to include for each topic.
+            
+        Returns:
+            List of (topic_id, terms_string) tuples.
+        """
+        if self.lda_seq_model is None:
+            raise RuntimeError("The LdaSeqModel is not initialized. Call fit() first or provide a model.")
+            
+        try:
+            return self.lda_seq_model.print_topics(time=time, top_terms=top_terms)
+        except Exception as e:
+            raise RuntimeError(f"Failed to get topics: {e}")
 
 if __name__ == '__main__':
-    # Example Usage (conceptual)
-    # This requires a pre-trained LdaSeqModel and appropriate data.
+    # Example Usage with the updated implementation
+    from gensim.test.utils import common_texts
     
-    # 1. Prepare your data (corpus, id2word, time_slices)
-    # from gensim.corpora import Dictionary
-    # from gensim.test.utils import common_texts # Example data
+    # 1. Prepare sample data for three time slices
+    texts_t0 = [doc for doc in common_texts[:3]]
+    texts_t1 = [doc for doc in common_texts[3:6]]
+    texts_t2 = [doc for doc in common_texts[6:]]
+    all_texts = texts_t0 + texts_t1 + texts_t2
     
-    # # Sample data for three time slices
-    # texts_t0 = [doc for doc in common_texts[:3]]
-    # texts_t1 = [doc for doc in common_texts[3:6]]
-    # texts_t2 = [doc for doc in common_texts[6:]]
-    # all_texts = texts_t0 + texts_t1 + texts_t2
+    # Create a DataFrame
+    periods = [0]*len(texts_t0) + [1]*len(texts_t1) + [2]*len(texts_t2)
+    data = {'text': [" ".join(doc) for doc in all_texts], 'period': periods}
+    sample_df = pd.DataFrame(data)
     
-    # # Create a DataFrame
-    # periods = [0]*len(texts_t0) + [1]*len(texts_t1) + [2]*len(texts_t2)
-    # data = {'text': [" ".join(doc) for doc in all_texts], 'period': periods}
-    # sample_df = pd.DataFrame(data)
-    
-    # # Create dictionary and corpus (as LdaSeqModel would need)
-    # tokenized_texts = [text.split() for text in sample_df['text']]
-    # id2word_global = Dictionary(tokenized_texts)
-    # corpus_global = [id2word_global.doc2bow(text) for text in tokenized_texts]
-    # time_slice_counts = sample_df.groupby('period').size().tolist()
-
-    # 2. Train LdaSeqModel (or load a pre-trained one)
-    # try:
-    #     # num_topics is a required parameter for LdaSeqModel
-    #     lda_seq = LdaSeqModel(corpus=corpus_global, id2word=id2word_global, time_slice=time_slice_counts, num_topics=2, initialize='gensim')
-    # except Exception as e:
-    #     print(f"Could not initialize LdaSeqModel for example: {e}")
-    #     print("This example requires a properly setup LdaSeqModel training environment.")
-    #     lda_seq = None # Fallback
-
-    # if lda_seq:
-    #     # 3. Initialize DynamicTopicModel
-    #     dtm = DynamicTopicModel(lda_seq_model=lda_seq, text_col='text', period_col='period')
-    
-    #     # 4. "Fit" the model to the DataFrame structure (primarily for metadata like time_slices)
-    #     dtm.fit(sample_df)
-    #     # At this point, dtm.time_slices should match time_slice_counts
-    #     # dtm.corpus and dtm.id2word would ideally be set if fit did full preprocessing
-    
-    #     # 5. "Transform" data (conceptual, as LdaSeqModel's transform is not straightforward for new docs)
-    #     # For demonstration, we might pass the same DataFrame
-    #     # In a real case, you'd need to define what transform means for LdaSeqModel
-    #     # (e.g., get topic distributions for documents at specific time points)
-    #     topic_info = dtm.transform(sample_df) 
-    #     print(f"Transform output (placeholder): {topic_info}")
-
-    #     # Example: Print topics for a specific time slice
-    #     # This uses the underlying LdaSeqModel directly
-    #     try:
-    #         topics_at_time_0 = lda_seq.print_topics(time=0, top_terms=5)
-    #         print("\nTopics at time=0:")
-    #         for topic_idx, terms in topics_at_time_0:
-    #             print(f"Topic {topic_idx}: {terms}")
-    #     except Exception as e:
-    #         print(f"Could not print topics: {e}")
-    pass
+    # 2. Initialize and fit the DynamicTopicModel
+    try:
+        # Create model with 2 topics
+        dtm = DynamicTopicModel(num_topics=2, text_col='text', period_col='period')
+        
+        # Fit the model (this will train the LdaSeqModel internally)
+        dtm.fit(sample_df)
+        
+        # 3. Transform data to get topic distributions
+        topic_distributions = dtm.transform(sample_df)
+        print(f"\nSample topic distribution for first document:")
+        print(topic_distributions[0])
+        
+        # 4. Get topics for a specific time slice
+        try:
+            topics_at_time_0 = dtm.get_topics(time=0, top_terms=5)
+            print("\nTopics at time=0:")
+            for topic_idx, terms in topics_at_time_0:
+                print(f"Topic {topic_idx}: {terms}")
+        except Exception as e:
+            print(f"Could not print topics: {e}")
+            
+    except Exception as e:
+        print(f"Error in example: {e}")
+        print("This example requires a properly setup LdaSeqModel training environment.")
