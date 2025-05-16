@@ -280,7 +280,10 @@ class DynamicTopicModel:
             # Convert to DataFrame
             return pd.DataFrame(all_topics_data)
         except Exception as e:
-            raise RuntimeError(f"Failed to get topics: {e}")
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"Error in get_topics:\n{error_trace}")
+            raise RuntimeError(f"Failed to get topics: {e}\nVariable types: topics={type(topics)}, topic_id={type(topic_id)}, topic_terms={type(topic_terms)}\nFull traceback:\n{error_trace}")
 
 
 if __name__ == "__main__":
