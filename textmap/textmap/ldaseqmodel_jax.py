@@ -105,21 +105,28 @@ def jax_compute_post_mean_scan(
 
 @jax.jit
 def jax_compute_post_variance_scan(
-    obs_variance_scalar: float,
-    chain_variance_scalar: float,
+    obs_variance_scalar: jnp.ndarray, # JAX scalar
+    chain_variance_scalar: jnp.ndarray, # JAX scalar
     num_time_slices: int,
     dtype: jnp.dtype = jnp.float64
 ) -> Tuple[jnp.ndarray, jnp.ndarray]: # variance_out (T+1), fwd_variance_out (T+1)
     T = num_time_slices
+    
+    # Ensure constants used in calculations also respect the dtype
+    _INIT_VARIANCE_CONST_JAX = jnp.array(INIT_VARIANCE_CONST_JAX, dtype=dtype)
+    _obs_variance_scalar = jnp.array(obs_variance_scalar, dtype=dtype)
+    _chain_variance_scalar = jnp.array(chain_variance_scalar, dtype=dtype)
+    _epsilon = jnp.array(1e-9, dtype=dtype)
+
 
     # --- Forward pass for fwd_variance ---
     def fwd_var_scan_body(carry_fwd_var_prev, _): # Loop T times
-        denominator = carry_fwd_var_prev + chain_variance_scalar + obs_variance_scalar
-        c_factor = jnp.where(denominator != 0.0, obs_variance_scalar / (denominator + 1e-9), 0.0)
-        fwd_var_curr = c_factor * (carry_fwd_var_prev + chain_variance_scalar)
+        denominator = carry_fwd_var_prev + _chain_variance_scalar + _obs_variance_scalar
+        c_factor = jnp.where(denominator != 0.0, _obs_variance_scalar / (denominator + _epsilon), 0.0)
+        fwd_var_curr = c_factor * (carry_fwd_var_prev + _chain_variance_scalar)
         return fwd_var_curr, fwd_var_curr
 
-    initial_fwd_var_carry = chain_variance_scalar * INIT_VARIANCE_CONST_JAX
+    initial_fwd_var_carry = _chain_variance_scalar * _INIT_VARIANCE_CONST_JAX
     _, fwd_var_values_1_to_T = jax.lax.scan(fwd_var_scan_body, initial_fwd_var_carry, jnp.arange(T))
     
     fwd_variance_out = jnp.zeros(T + 1, dtype=dtype)
@@ -128,12 +135,12 @@ def jax_compute_post_variance_scan(
 
     # --- Backward pass for variance ---
     def bwd_var_scan_body(carry_var_next, fwd_var_val_t):
-        c_bwd_factor_den = fwd_var_val_t + chain_variance_scalar
-        c_bwd_ratio = jnp.where(c_bwd_factor_den != 0.0, fwd_var_val_t / (c_bwd_factor_den + 1e-9), 0.0)
+        c_bwd_factor_den = fwd_var_val_t + _chain_variance_scalar
+        c_bwd_ratio = jnp.where(c_bwd_factor_den != 0.0, fwd_var_val_t / (c_bwd_factor_den + _epsilon), 0.0)
         c_bwd_sq = jnp.power(c_bwd_ratio, 2)
-        c_bwd_sq = jnp.where(fwd_var_val_t > 1e-9, c_bwd_sq, 0.0) # if fwd_var_val_t is ~0, c_bwd_sq is 0
+        c_bwd_sq = jnp.where(fwd_var_val_t > _epsilon, c_bwd_sq, 0.0) # if fwd_var_val_t is ~0, c_bwd_sq is 0
 
-        var_curr = (c_bwd_sq * (carry_var_next - chain_variance_scalar)) + (
+        var_curr = (c_bwd_sq * (carry_var_next - _chain_variance_scalar)) + (
             (1.0 - c_bwd_sq) * fwd_var_val_t
         )
         return var_curr, var_curr
@@ -273,8 +280,11 @@ class sslm_jax(utils.SaveLoad):
         self.obs = jnp.array(np.tile(log_norm_counts[:, np.newaxis], (1, T)), dtype=self.dtype)
 
         # Compute post variance (once, then tile as it's word-independent)
+        # Cast scalar Python floats to JAX scalars of the correct dtype
+        obs_var_scalar_jax = jnp.array(self.obs_variance, dtype=self.dtype)
+        chain_var_scalar_jax = jnp.array(self.chain_variance, dtype=self.dtype)
         single_variance_out, single_fwd_variance_out = jax_compute_post_variance_scan(
-            self.obs_variance, self.chain_variance, T, self.dtype
+            obs_var_scalar_jax, chain_var_scalar_jax, T, self.dtype
         )
         self.variance = jnp.tile(single_variance_out[jnp.newaxis, :], (W, 1))
         self.fwd_variance = jnp.tile(single_fwd_variance_out[jnp.newaxis, :], (W, 1))
@@ -406,8 +416,11 @@ class sslm_jax(utils.SaveLoad):
         T = self.num_time_slices
         
         # Compute post variance (once, then tile as it's word-independent)
+        # Cast scalar Python floats to JAX scalars of the correct dtype
+        obs_var_scalar_jax = jnp.array(self.obs_variance, dtype=self.dtype)
+        chain_var_scalar_jax = jnp.array(self.chain_variance, dtype=self.dtype)
         single_variance_out, single_fwd_variance_out = jax_compute_post_variance_scan(
-            self.obs_variance, self.chain_variance, T, self.dtype
+            obs_var_scalar_jax, chain_var_scalar_jax, T, self.dtype
         )
         self.variance = jnp.tile(single_variance_out[jnp.newaxis, :], (W, 1))
         self.fwd_variance = jnp.tile(single_fwd_variance_out[jnp.newaxis, :], (W, 1))
