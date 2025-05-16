@@ -2,7 +2,8 @@ import pandas as pd
 import numpy as np
 from gensim.models.ldaseqmodel import LdaSeqModel
 from gensim.corpora import Dictionary
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, Union
+import pandas as pd
 
 class DynamicTopicModel:
     """
@@ -202,36 +203,54 @@ class DynamicTopicModel:
             
         return topic_distributions
 
-    def get_topics(self, time: int = 0, top_terms: int = 10) -> List[Tuple[int, str]]:
+    def get_topics(self, time_periods: Optional[List[int]] = None, top_terms: int = 10) -> pd.DataFrame:
         """
-        Get the topics for a specific time slice.
+        Get the topics for specific time slices.
         
         Args:
-            time: Time slice index.
+            time_periods: List of time slice indices. If None, returns topics for all time slices.
             top_terms: Number of top terms to include for each topic.
             
         Returns:
-            List of (topic_id, terms_string) tuples.
+            DataFrame with columns: 'time_period', 'topic_id', 'terms'
         """
         if self.lda_seq_model is None:
             raise RuntimeError("The LdaSeqModel is not initialized. Call fit() first or provide a model.")
+        
+        # If time_periods is None, use all available time periods
+        if time_periods is None:
+            time_periods = list(range(len(self.time_slices)))
+        # If a single integer is provided, convert to a list
+        elif isinstance(time_periods, int):
+            time_periods = [time_periods]
             
         try:
-            # Get topics from the model
-            topics = self.lda_seq_model.print_topics(time=time, top_terms=top_terms)
+            # Create a list to store all topic data
+            all_topics_data = []
             
-            # Convert to the expected format: list of (topic_id, terms_string) tuples
-            formatted_topics = []
-            for topic_id, topic_terms in enumerate(topics):
-                # Convert the list of term-weight tuples to a string
-                if isinstance(topic_terms, list):
-                    terms_str = " + ".join([f"{weight:.3f}*{term}" for term, weight in topic_terms])
-                    formatted_topics.append((topic_id, terms_str))
-                else:
-                    # If already in the expected format, use as is
-                    formatted_topics.append((topic_id, topic_terms))
+            # Process each time period
+            for time_period in time_periods:
+                # Get topics from the model for this time period
+                topics = self.lda_seq_model.print_topics(time=time_period, top_terms=top_terms)
+                
+                # Process each topic
+                for topic_id, topic_terms in enumerate(topics):
+                    # Convert the list of term-weight tuples to a string
+                    if isinstance(topic_terms, list):
+                        terms_str = " + ".join([f"{weight:.3f}*{term}" for term, weight in topic_terms])
+                    else:
+                        # If already in the expected format, use as is
+                        terms_str = topic_terms
+                    
+                    # Add to our data collection
+                    all_topics_data.append({
+                        'time_period': time_period,
+                        'topic_id': topic_id,
+                        'terms': terms_str
+                    })
             
-            return formatted_topics
+            # Convert to DataFrame
+            return pd.DataFrame(all_topics_data)
         except Exception as e:
             raise RuntimeError(f"Failed to get topics: {e}")
 

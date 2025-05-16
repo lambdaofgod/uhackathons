@@ -120,18 +120,26 @@ def test_fit_transform(model_params, sample_data):
 
 
 def test_get_topics(model_params, sample_data):
-    """Test getting topics for a time slice."""
+    """Test getting topics for time slices."""
     # Initialize and fit model
     dtm = DynamicTopicModel(**model_params)
     dtm.fit(sample_data)
 
-    # Get topics for time=0
-    topics = dtm.get_topics(time=0, top_terms=5)
-
+    # Test with a single time period
+    topics_df = dtm.get_topics(time_periods=0, top_terms=5)
+    
     # Check output format
-    assert isinstance(topics, list)
-    if topics:
-        assert isinstance(topics[0], tuple)
-        assert len(topics[0]) == 2
-        assert isinstance(topics[0][0], int)  # Topic ID
-        assert isinstance(topics[0][1], str)  # Terms string
+    assert isinstance(topics_df, pd.DataFrame)
+    assert set(topics_df.columns) == {'time_period', 'topic_id', 'terms'}
+    assert len(topics_df) > 0
+    assert all(topics_df['time_period'] == 0)
+    
+    # Test with multiple time periods
+    topics_df_multi = dtm.get_topics(time_periods=[0, 1], top_terms=5)
+    assert isinstance(topics_df_multi, pd.DataFrame)
+    assert set(topics_df_multi['time_period'].unique()) == {0, 1}
+    
+    # Test with all time periods (None)
+    topics_df_all = dtm.get_topics(time_periods=None, top_terms=5)
+    assert isinstance(topics_df_all, pd.DataFrame)
+    assert len(topics_df_all['time_period'].unique()) == len(dtm.time_slices)
