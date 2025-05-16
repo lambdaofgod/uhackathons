@@ -113,20 +113,21 @@ def jax_compute_post_variance_scan(
     T = num_time_slices
     
     # Ensure constants used in calculations also respect the dtype
+    # obs_variance_scalar and chain_variance_scalar are input JAX scalars; use them directly.
     _INIT_VARIANCE_CONST_JAX = jnp.array(INIT_VARIANCE_CONST_JAX, dtype=dtype)
-    _obs_variance_scalar = jnp.array(obs_variance_scalar, dtype=dtype)
-    _chain_variance_scalar = jnp.array(chain_variance_scalar, dtype=dtype)
     _epsilon = jnp.array(1e-9, dtype=dtype)
+    _one = jnp.array(1.0, dtype=dtype)
+    _zero = jnp.array(0.0, dtype=dtype)
 
 
     # --- Forward pass for fwd_variance ---
     def fwd_var_scan_body(carry_fwd_var_prev, _): # Loop T times
-        denominator = carry_fwd_var_prev + _chain_variance_scalar + _obs_variance_scalar
-        c_factor = jnp.where(denominator != 0.0, _obs_variance_scalar / (denominator + _epsilon), 0.0)
-        fwd_var_curr = c_factor * (carry_fwd_var_prev + _chain_variance_scalar)
+        denominator = carry_fwd_var_prev + chain_variance_scalar + obs_variance_scalar
+        c_factor = jnp.where(denominator != _zero, obs_variance_scalar / (denominator + _epsilon), _zero)
+        fwd_var_curr = c_factor * (carry_fwd_var_prev + chain_variance_scalar)
         return fwd_var_curr, fwd_var_curr
 
-    initial_fwd_var_carry = _chain_variance_scalar * _INIT_VARIANCE_CONST_JAX
+    initial_fwd_var_carry = chain_variance_scalar * _INIT_VARIANCE_CONST_JAX
     _, fwd_var_values_1_to_T = jax.lax.scan(fwd_var_scan_body, initial_fwd_var_carry, jnp.arange(T))
     
     fwd_variance_out = jnp.zeros(T + 1, dtype=dtype)
@@ -135,13 +136,13 @@ def jax_compute_post_variance_scan(
 
     # --- Backward pass for variance ---
     def bwd_var_scan_body(carry_var_next, fwd_var_val_t):
-        c_bwd_factor_den = fwd_var_val_t + _chain_variance_scalar
-        c_bwd_ratio = jnp.where(c_bwd_factor_den != 0.0, fwd_var_val_t / (c_bwd_factor_den + _epsilon), 0.0)
+        c_bwd_factor_den = fwd_var_val_t + chain_variance_scalar # Use input JAX scalar directly
+        c_bwd_ratio = jnp.where(c_bwd_factor_den != _zero, fwd_var_val_t / (c_bwd_factor_den + _epsilon), _zero)
         c_bwd_sq = jnp.power(c_bwd_ratio, 2)
-        c_bwd_sq = jnp.where(fwd_var_val_t > _epsilon, c_bwd_sq, 0.0) # if fwd_var_val_t is ~0, c_bwd_sq is 0
+        c_bwd_sq = jnp.where(fwd_var_val_t > _epsilon, c_bwd_sq, _zero) # if fwd_var_val_t is ~0, c_bwd_sq is 0
 
-        var_curr = (c_bwd_sq * (carry_var_next - _chain_variance_scalar)) + (
-            (1.0 - c_bwd_sq) * fwd_var_val_t
+        var_curr = (c_bwd_sq * (carry_var_next - chain_variance_scalar)) + ( # Use input JAX scalar directly
+            (_one - c_bwd_sq) * fwd_var_val_t
         )
         return var_curr, var_curr
 
