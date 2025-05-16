@@ -105,7 +105,6 @@ def jax_compute_post_mean_scan(
 
 @jax.jit
 def jax_compute_post_variance_scan(
-    _placeholder_for_vmap: jnp.ndarray, # Used to vmap W times if needed
     obs_variance_scalar: float,
     chain_variance_scalar: float,
     num_time_slices: int,
@@ -273,20 +272,14 @@ class sslm_jax(utils.SaveLoad):
 
         self.obs = jnp.array(np.tile(log_norm_counts[:, np.newaxis], (1, T)), dtype=self.dtype)
 
-        # Compute post variance (vmapped)
-        # The first argument to jax_compute_post_variance_scan is a placeholder for vmap.
-        # in_axes=(0, None, None, None, None) means map over the first dim of jnp.arange(W)
-        # and broadcast the other arguments.
-        vmap_compute_var = jax.vmap(
-            jax_compute_post_variance_scan, in_axes=(0, None, None, None, None), out_axes=0
+        # Compute post variance (once, then tile as it's word-independent)
+        single_variance_out, single_fwd_variance_out = jax_compute_post_variance_scan(
+            self.obs_variance, self.chain_variance, T, self.dtype
         )
-        all_vars, all_fwd_vars = vmap_compute_var(
-            jnp.arange(W), self.obs_variance, self.chain_variance, T, self.dtype
-        )
-        self.variance = all_vars
-        self.fwd_variance = all_fwd_vars
+        self.variance = jnp.tile(single_variance_out[jnp.newaxis, :], (W, 1))
+        self.fwd_variance = jnp.tile(single_fwd_variance_out[jnp.newaxis, :], (W, 1))
         
-        # Compute post mean (vmapped)
+        # Compute post mean (vmapped as it depends on self.obs and self.fwd_variance)
         vmap_compute_mean = jax.vmap(
             jax_compute_post_mean_scan, in_axes=(0, 0, None, None, None), out_axes=0
         )
@@ -412,18 +405,12 @@ class sslm_jax(utils.SaveLoad):
         W = self.vocab_len
         T = self.num_time_slices
         
-        # Compute post variance (vmapped)
-        # The first argument to jax_compute_post_variance_scan is a placeholder for vmap.
-        # in_axes=(0, None, None, None, None) means map over the first dim of jnp.arange(W)
-        # and broadcast the other arguments.
-        vmap_compute_var = jax.vmap(
-            jax_compute_post_variance_scan, in_axes=(0, None, None, None, None), out_axes=0
+        # Compute post variance (once, then tile as it's word-independent)
+        single_variance_out, single_fwd_variance_out = jax_compute_post_variance_scan(
+            self.obs_variance, self.chain_variance, T, self.dtype
         )
-        all_vars, all_fwd_vars = vmap_compute_var(
-            jnp.arange(W), self.obs_variance, self.chain_variance, T, self.dtype
-        )
-        self.variance = all_vars
-        self.fwd_variance = all_fwd_vars
+        self.variance = jnp.tile(single_variance_out[jnp.newaxis, :], (W, 1))
+        self.fwd_variance = jnp.tile(single_fwd_variance_out[jnp.newaxis, :], (W, 1))
 
         vmap_compute_mean = jax.vmap(
             jax_compute_post_mean_scan, in_axes=(0, 0, None, None, None), out_axes=0
