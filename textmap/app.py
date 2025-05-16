@@ -92,52 +92,119 @@ with gr.Blocks() as demo:
             )  # Placeholder for status messages
 
     # Connect preview button to load file preview
-    def update_ui_after_preview(columns, preview, file_format, status):
-        # Only set default values if they exist in the columns list
-        default_text = columns[0] if columns else None
-        default_title = columns[0] if columns else None
-        default_date = columns[0] if columns else None
+    def load_file_preview_and_update_ui(file_path):
+        """
+        Load a preview of the file and update the UI accordingly
         
-        # Try to make intelligent guesses for column selection
-        if columns:
-            # Look for common text column names
-            text_candidates = ['text', 'body', 'content', 'description']
-            for candidate in text_candidates:
-                if candidate in columns:
-                    default_text = candidate
-                    break
-                    
-            # Look for common title column names
-            title_candidates = ['title', 'heading', 'name', 'subject']
-            for candidate in title_candidates:
-                if candidate in columns:
-                    default_title = candidate
-                    break
-                    
-            # Look for common date column names
-            date_candidates = ['date', 'created_at', 'timestamp', 'time']
-            for candidate in date_candidates:
-                if candidate in columns:
-                    default_date = candidate
-                    break
+        Args:
+            file_path: The uploaded file object from Gradio
+            
+        Returns:
+            dict: Updates for the UI components
+        """
+        if file_path is None:
+            return {
+                text_column: gr.update(choices=[], value=None),
+                title_column: gr.update(choices=[], value=None),
+                date_column: gr.update(choices=[], value=None),
+                preview_output: gr.update(value=None),
+                column_selection_group: gr.update(visible=False),
+                file_info: None,
+                preview_status: "Please upload a file first."
+            }
         
-        return {
-            text_column: gr.update(choices=columns, value=default_text),
-            title_column: gr.update(choices=columns, value=default_title),
-            date_column: gr.update(choices=columns, value=default_date),
-            preview_output: gr.update(value=preview),
-            column_selection_group: gr.update(visible=preview is not None),
-            preview_status: status
-        }
-    
+        file_ext = file_path.name.split('.')[-1].lower()
+        
+        try:
+            if file_ext == 'jsonl':
+                # Read a few lines for preview
+                with open(file_path.name, 'r') as f:
+                    lines = [f.readline().strip() for _ in range(5)]
+                    data = [json.loads(line) for line in lines if line]
+                    
+                if not data:
+                    return {
+                        text_column: gr.update(choices=[], value=None),
+                        title_column: gr.update(choices=[], value=None),
+                        date_column: gr.update(choices=[], value=None),
+                        preview_output: gr.update(value=None),
+                        column_selection_group: gr.update(visible=False),
+                        file_info: None,
+                        preview_status: "No valid data found in the JSONL file."
+                    }
+                    
+                # Create a DataFrame from the sample
+                preview_df = pd.DataFrame(data)
+                columns = list(preview_df.columns)
+                
+            elif file_ext == 'csv':
+                preview_df = pd.read_csv(file_path.name, nrows=5)
+                columns = list(preview_df.columns)
+                
+            else:
+                return {
+                    text_column: gr.update(choices=[], value=None),
+                    title_column: gr.update(choices=[], value=None),
+                    date_column: gr.update(choices=[], value=None),
+                    preview_output: gr.update(value=None),
+                    column_selection_group: gr.update(visible=False),
+                    file_info: None,
+                    preview_status: f"Unsupported file format: {file_ext}. Please upload a CSV or JSONL file."
+                }
+            
+            # Make intelligent guesses for column selection
+            default_text = columns[0] if columns else None
+            default_title = columns[0] if columns else None
+            default_date = columns[0] if columns else None
+            
+            # Try to make intelligent guesses for column selection
+            if columns:
+                # Look for common text column names
+                text_candidates = ['text', 'body', 'content', 'description']
+                for candidate in text_candidates:
+                    if candidate in columns:
+                        default_text = candidate
+                        break
+                        
+                # Look for common title column names
+                title_candidates = ['title', 'heading', 'name', 'subject']
+                for candidate in title_candidates:
+                    if candidate in columns:
+                        default_title = candidate
+                        break
+                        
+                # Look for common date column names
+                date_candidates = ['date', 'created_at', 'timestamp', 'time']
+                for candidate in date_candidates:
+                    if candidate in columns:
+                        default_date = candidate
+                        break
+            
+            return {
+                text_column: gr.update(choices=columns, value=default_text),
+                title_column: gr.update(choices=columns, value=default_title),
+                date_column: gr.update(choices=columns, value=default_date),
+                preview_output: gr.update(value=preview_df),
+                column_selection_group: gr.update(visible=True),
+                file_info: file_ext,
+                preview_status: f"Successfully loaded {file_ext.upper()} preview with {len(columns)} columns."
+            }
+            
+        except Exception as e:
+            return {
+                text_column: gr.update(choices=[], value=None),
+                title_column: gr.update(choices=[], value=None),
+                date_column: gr.update(choices=[], value=None),
+                preview_output: gr.update(value=None),
+                column_selection_group: gr.update(visible=False),
+                file_info: None,
+                preview_status: f"Error loading file: {str(e)}"
+            }
+
     preview_button.click(
-        fn=load_file_preview,
+        fn=load_file_preview_and_update_ui,
         inputs=[file_input],
-        outputs=[text_column, preview_output, file_info, preview_status],
-    ).then(
-        fn=update_ui_after_preview,
-        inputs=[text_column, preview_output, file_info, preview_status],
-        outputs=[text_column, title_column, date_column, preview_output, column_selection_group, preview_status]
+        outputs=[text_column, title_column, date_column, preview_output, column_selection_group, file_info, preview_status]
     )
 
     submit_button.click(
