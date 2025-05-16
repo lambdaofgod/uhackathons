@@ -10,6 +10,7 @@ LdaSeqModel (JAX version)
 This module provides a JAX-based implementation of the Dynamic Topic Model (DTM),
 focusing on replacing Numba-jitted functions and the `update_obs` optimization
 with JAX equivalents for potential performance improvements on accelerators.
+The E-step still relies on Gensim's LdaModel and LdaPost for document inference.
 """
 
 import logging
@@ -20,9 +21,14 @@ import jax
 import jax.numpy as jnp
 import optax
 from scipy.special import gammaln # For LdaPost, if used, or bound calculations
+import tqdm # For progress bars
 
 from gensim import utils, matutils
 from gensim.models import ldamodel # May still be used for E-step components
+# Assuming LdaPost can be imported from the original ldaseqmodel or a utility module
+# If LdaPost is in the same directory in ldaseqmodel.py:
+from .ldaseqmodel import LdaPost
+
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +38,7 @@ INIT_MULT_JAX = 1000.0
 OBS_NORM_CUTOFF_JAX = 2.0 # Default, can be instance variable
 DEFAULT_JAX_OBS_OPTIMIZER_LR = 0.01
 DEFAULT_JAX_OBS_OPTIMIZER_STEPS = 50
+LDASQE_EM_THRESHOLD_JAX = 1e-4
 
 
 @jax.jit
@@ -214,7 +221,7 @@ class sslm_jax(utils.SaveLoad):
         self,
         vocab_len: int,
         num_time_slices: int,
-        num_topics: int, # For context, not directly used in all methods here
+        num_topics: int, 
         obs_variance: float = 0.5,
         chain_variance: float = 0.005,
         obs_optimizer_lr: float = DEFAULT_JAX_OBS_OPTIMIZER_LR,
@@ -223,16 +230,15 @@ class sslm_jax(utils.SaveLoad):
     ):
         self.vocab_len = vocab_len
         self.num_time_slices = num_time_slices
-        self.num_topics = num_topics # Unused in this snippet but part of original
+        self.num_topics = num_topics 
         self.obs_variance = obs_variance
         self.chain_variance = chain_variance
         self.dtype = dtype
 
         self.obs_optimizer_lr = obs_optimizer_lr
         self.obs_optimizer_steps = obs_optimizer_steps
-        self.obs_norm_cutoff = OBS_NORM_CUTOFF_JAX # Can be configured
+        self.obs_norm_cutoff = OBS_NORM_CUTOFF_JAX 
 
-        # Initialize JAX arrays (or convert from numpy if needed)
         self.obs = jnp.zeros((vocab_len, num_time_slices), dtype=dtype)
         self.e_log_prob = jnp.zeros((vocab_len, num_time_slices), dtype=dtype)
         self.mean = jnp.zeros((vocab_len, num_time_slices + 1), dtype=dtype)
@@ -241,40 +247,32 @@ class sslm_jax(utils.SaveLoad):
         self.fwd_variance = jnp.zeros((vocab_len, num_time_slices + 1), dtype=dtype)
         self.zeta = jnp.zeros(num_time_slices, dtype=dtype)
         
-        # Other DIM-related attributes from original sslm are omitted for now
-        # self.w_phi_l, self.w_phi_sum, etc.
-
     def update_zeta_jax(self) -> jnp.ndarray:
-        # self.mean is (W, T+1), self.variance is (W, T+1)
-        # self.zeta is (T)
-        exp_terms = jnp.exp(self.mean[:, 1:] + self.variance[:, 1:] / 2.0) # Shape (W, T)
-        new_zeta = jnp.sum(exp_terms, axis=0) # Sum over W, result shape (T)
+        exp_terms = jnp.exp(self.mean[:, 1:] + self.variance[:, 1:] / 2.0) 
+        new_zeta = jnp.sum(exp_terms, axis=0) 
         return new_zeta
 
     def compute_expected_log_prob_jax(self) -> jnp.ndarray:
-        # self.e_log_prob[w][t] = self.mean[w][t + 1] - np.log(self.zeta[t])
-        # Vectorized:
-        # self.mean[:, 1:] is (W, T)
-        # jnp.log(self.zeta) is (T), needs broadcasting for subtraction with (W,T)
-        log_zeta_broadcast = jnp.log(self.zeta[jnp.newaxis, :] + 1e-9) # (1,T)
+        log_zeta_broadcast = jnp.log(self.zeta[jnp.newaxis, :] + 1e-9) 
         new_e_log_prob = self.mean[:, 1:] - log_zeta_broadcast
         return new_e_log_prob
 
-    def sslm_counts_init_jax(self, sstats_topic: np.ndarray): # sstats_topic is for one topic (Vocab,)
+    def sslm_counts_init_jax(self, sstats_topic: np.ndarray): 
         W = self.vocab_len
         T = self.num_time_slices
 
-        log_norm_counts = np.copy(sstats_topic) # numpy operations for init
-        log_norm_counts /= np.sum(log_norm_counts)
-        log_norm_counts += 1.0 / W
-        log_norm_counts /= np.sum(log_norm_counts)
-        log_norm_counts = np.log(log_norm_counts)
+        log_norm_counts = np.copy(sstats_topic) 
+        log_norm_counts_sum = np.sum(log_norm_counts)
+        if log_norm_counts_sum > 0:
+            log_norm_counts /= log_norm_counts_sum
+        log_norm_counts += 1.0 / W # Smoothing
+        log_norm_counts_sum_smoothed = np.sum(log_norm_counts)
+        if log_norm_counts_sum_smoothed > 0:
+             log_norm_counts /= log_norm_counts_sum_smoothed
+        log_norm_counts = np.log(log_norm_counts + 1e-9) # Add epsilon before log
 
         self.obs = jnp.array(np.tile(log_norm_counts[:, np.newaxis], (1, T)), dtype=self.dtype)
 
-        # Compute post variance (vmapped)
-        # Placeholder for vmap: jnp.arange(W) - this argument is not used by the function itself
-        # but tells vmap to run W times.
         vmap_compute_var = jax.vmap(
             jax_compute_post_variance_scan, in_axes=(None, None, None, None, None), out_axes=0
         )
@@ -284,7 +282,6 @@ class sslm_jax(utils.SaveLoad):
         self.variance = all_vars
         self.fwd_variance = all_fwd_vars
         
-        # Compute post mean (vmapped)
         vmap_compute_mean = jax.vmap(
             jax_compute_post_mean_scan, in_axes=(0, 0, None, None, None), out_axes=0
         )
@@ -304,10 +301,10 @@ class sslm_jax(utils.SaveLoad):
         optimizer = optax.adam(learning_rate=self.obs_optimizer_lr)
         
         new_obs_list = []
-        norm_cutoff_obs_cache = None # Reset per call
+        norm_cutoff_obs_cache = None 
 
-        for w_idx in range(W): # Python loop over words
-            word_counts_w = sstats_topic_all_times[w_idx, :] # (T,)
+        for w_idx in range(W): 
+            word_counts_w = sstats_topic_all_times[w_idx, :] 
             counts_norm = jnp.linalg.norm(word_counts_w)
             
             initial_obs_w_val = self.obs[w_idx, :]
@@ -324,7 +321,6 @@ class sslm_jax(utils.SaveLoad):
                     word_counts_w_for_opt = jnp.zeros_like(word_counts_w)
             
             if run_optimization:
-                # Static args for the current word's optimization
                 static_args_for_opt_tuple = (
                     word_counts_w_for_opt,
                     totals_all_times,
@@ -333,16 +329,14 @@ class sslm_jax(utils.SaveLoad):
                     self.chain_variance,
                     self.obs_variance,
                     T,
-                    self.zeta,
+                    self.zeta, # Pass current zeta for this topic
                 )
 
-                # JIT-compiled optimization loop for a single obs_w vector
-                # grad_fn_jax_objective_for_word_obs is already JITted
                 @jax.jit
                 def optimize_single_obs_w_loop(initial_obs_w, *args_tuple_for_loss):
                     opt_state = optimizer.init(initial_obs_w)
                     
-                    def opt_step(_, state_tuple): # Loop index not used
+                    def opt_step(_, state_tuple): 
                         current_obs, current_opt_state = state_tuple
                         grads = grad_fn_jax_objective_for_word_obs(current_obs, *args_tuple_for_loss)
                         updates, new_opt_state = optimizer.apply_updates(grads, current_opt_state, current_obs)
@@ -356,14 +350,13 @@ class sslm_jax(utils.SaveLoad):
                 
                 current_obs_w_optimized = optimize_single_obs_w_loop(initial_obs_w_val, *static_args_for_opt_tuple)
 
-                if counts_norm < self.obs_norm_cutoff and run_optimization:
+                if counts_norm < self.obs_norm_cutoff and run_optimization: # Cache only if it was just computed
                      norm_cutoff_obs_cache = jnp.copy(current_obs_w_optimized)
             
             new_obs_list.append(current_obs_w_optimized)
 
         self.obs = jnp.stack(new_obs_list, axis=0)
 
-        # Recompute self.mean and self.fwd_mean for all words using the new self.obs
         vmap_compute_mean = jax.vmap(
             jax_compute_post_mean_scan, in_axes=(0, 0, None, None, None), out_axes=0
         )
@@ -381,41 +374,25 @@ class sslm_jax(utils.SaveLoad):
         T = self.num_time_slices
         safe_chain_variance = self.chain_variance + 1e-9
 
-        # Initial term related to variance at boundaries
-        # Original: sum(self.variance[w][0] - self.variance[w][t] for w in range(w)) / 2 * chain_variance
-        # Assuming 't' in original meant T (num_time_slices)
         bound_val = jnp.sum(self.variance[:, 0] - self.variance[:, T]) / (2 * safe_chain_variance)
 
-        # Loop over time slices t = 0 to T-1 (for sstats, totals, zeta)
-        # Corresponds to mean/variance indices t+1 and t
         def bound_time_loop_body(t_loop_idx, current_bound_accum):
-            # Contributions from all words for this time slice t_loop_idx
-            # mean[:, t_loop_idx + 1] is m_{t+1}
-            # mean[:, t_loop_idx] is m_{t}
-            # variance[:, t_loop_idx + 1] is v_{t+1}
-            # sstats_topic_all_times[:, t_loop_idx] is sstats_w,t
-            
             m_t_plus_1 = self.mean[:, t_loop_idx + 1]
             m_t = self.mean[:, t_loop_idx]
             v_t_plus_1 = self.variance[:, t_loop_idx + 1]
             sstats_w_t = sstats_topic_all_times[:, t_loop_idx]
-
-            # Term 1 (sum over w)
+            
             term1_w_contrib = (jnp.power(m_t_plus_1 - m_t, 2) / (2 * safe_chain_variance)) - \
                               (v_t_plus_1 / safe_chain_variance) - \
                               jnp.log(safe_chain_variance)
             sum_term1_w = jnp.sum(term1_w_contrib)
             
-            # Term 2 (sum over w)
             term2_w_contrib = sstats_w_t * m_t_plus_1
             sum_term2_w = jnp.sum(term2_w_contrib)
             
-            # Entropy term (sum over w)
-            # Add epsilon to v_t_plus_1 for log to prevent log(0) or log(<0)
             ent_w_contrib = jnp.log(jnp.abs(v_t_plus_1) + 1e-9) / 2.0 
             sum_ent_w = jnp.sum(ent_w_contrib)
 
-            # Term 3 (scalar for this time slice)
             term3_scalar = -totals_all_times[t_loop_idx] * jnp.log(self.zeta[t_loop_idx] + 1e-9)
             
             current_bound_accum += sum_term2_w + term3_scalar + sum_ent_w - sum_term1_w
@@ -430,7 +407,6 @@ class sslm_jax(utils.SaveLoad):
         W = self.vocab_len
         T = self.num_time_slices
         
-        # Initial computation of variance (once per fit_sslm call)
         vmap_compute_var = jax.vmap(
             jax_compute_post_variance_scan, in_axes=(None, None, None, None, None), out_axes=0
         )
@@ -440,8 +416,6 @@ class sslm_jax(utils.SaveLoad):
         self.variance = all_vars
         self.fwd_variance = all_fwd_vars
 
-        # Initial bound calculation
-        # Need mean and zeta consistent with current obs and new variance
         vmap_compute_mean = jax.vmap(
             jax_compute_post_mean_scan, in_axes=(0, 0, None, None, None), out_axes=0
         )
@@ -458,14 +432,11 @@ class sslm_jax(utils.SaveLoad):
         for iter_num in range(sslm_max_iter):
             old_bound = bound
             
-            # Update observations (M-step part 1)
             self.obs, self.zeta = self.update_obs_jax(sstats_topic_all_times, totals_all_times)
-            # self.mean and self.fwd_mean are updated within update_obs_jax
             
-            # Recompute bound
             bound = self.compute_bound_jax(sstats_topic_all_times, totals_all_times)
             
-            convergence = jnp.fabs((bound - old_bound) / (old_bound + 1e-9)) # Add epsilon to old_bound
+            convergence = jnp.fabs((bound - old_bound) / (old_bound + 1e-9)) 
             logger.info(
                 "sslm_jax iter %i, bound %f, convergence %f",
                 iter_num + 1, bound, convergence
@@ -480,30 +451,28 @@ class sslm_jax(utils.SaveLoad):
 class LdaSeqModelJax(utils.SaveLoad):
     """
     JAX-based LdaSeqModel (Dynamic Topic Model).
-    This is a skeleton and needs further implementation, especially for the E-step
-    and coordination with Gensim's LdaModel if parts of it are reused.
+    M-step (topic evolution) is JAX-based. E-step (document inference) uses Gensim's LdaModel.
     """
     def __init__(
         self,
-        corpus=None, # Keep similar API to original
+        corpus=None, 
         time_slice: Optional[List[int]] = None,
-        id2word: Optional[Any] = None, # gensim.corpora.Dictionary
+        id2word: Optional[Any] = None, 
         num_topics: int = 10,
-        alphas: float = 0.01, # Symmetric alpha
+        alphas: float = 0.01, 
         chain_variance: float = 0.005,
         obs_variance: float = 0.5,
-        # ... other LdaSeqModel parameters ...
-        random_state_seed: int = 0, # For JAX PRNG key
+        random_state_seed: int = 0, 
         dtype: jnp.dtype = jnp.float64,
-        # JAX specific SSLM params
         sslm_obs_optimizer_lr: float = DEFAULT_JAX_OBS_OPTIMIZER_LR,
         sslm_obs_optimizer_steps: int = DEFAULT_JAX_OBS_OPTIMIZER_STEPS,
-        # E-step related params from original
-        lda_inference_max_iter=25,
-        em_min_iter=6,
-        em_max_iter=20,
-        chunksize=100,
-        passes=10 # For initial LDA model if used
+        lda_inference_max_iter: int = 25,
+        em_min_iter: int = 6,
+        em_max_iter: int = 20,
+        chunksize: int = 100,
+        passes: int = 10,
+        sslm_max_iter_per_topic: int = 2, # Max iterations for sslm_jax.fit_sslm_jax
+        sslm_convergence_threshold: float = 1e-6 # Convergence for sslm_jax.fit_sslm_jax
     ):
         self.id2word = id2word
         if corpus is None and self.id2word is None:
@@ -512,14 +481,44 @@ class LdaSeqModelJax(utils.SaveLoad):
         self.vocab_len = 0
         if self.id2word:
             self.vocab_len = len(self.id2word)
-        # TODO: Infer vocab_len from corpus if id2word is None (like original)
+        elif corpus is not None: # Infer from corpus if id2word not provided
+             logger.warning("No id2word provided, inferring from corpus. This may be slow.")
+             self.id2word = utils.dict_from_corpus(corpus)
+             self.vocab_len = len(self.id2word)
+
 
         self.num_topics = num_topics
         self.time_slice = time_slice
+        if self.time_slice is None and corpus is not None:
+            raise ValueError("time_slice must be provided if corpus is given.")
         self.num_time_slices = len(time_slice) if time_slice else 0
-        self.alphas_np = np.full(num_topics, alphas, dtype=np.float64) # For Gensim LDA
+        
+        self.alphas_np = np.full(num_topics, alphas, dtype=np.float64) 
         self.dtype = dtype
         self.key = jax.random.PRNGKey(random_state_seed)
+        self.random_state_np = np.random.RandomState(random_state_seed) # For Gensim LDA
+
+        self.lda_inference_max_iter = lda_inference_max_iter
+        self.em_min_iter = em_min_iter
+        self.em_max_iter = em_max_iter
+        self.chunksize = chunksize
+        self.sslm_max_iter_per_topic = sslm_max_iter_per_topic
+        self.sslm_convergence_threshold = sslm_convergence_threshold
+
+        self.corpus_len = 0
+        if corpus is not None:
+            try:
+                self.corpus_len = len(corpus) # type: ignore
+            except TypeError:
+                logger.warning("Input corpus stream has no len(); counting documents for progress bar.")
+                self.corpus_len = sum(1 for _ in corpus) # type: ignore
+        
+        self.max_doc_len = 0
+        if corpus is not None:
+            # This can be slow for a true stream. Consider making it optional or handled differently.
+            logger.info("Calculating max document length from corpus...")
+            self.max_doc_len = max(len(doc) for doc in corpus) if self.corpus_len > 0 else 0 # type: ignore
+
 
         self.topic_chains_jax: List[sslm_jax] = []
         for _ in range(num_topics):
@@ -535,106 +534,348 @@ class LdaSeqModelJax(utils.SaveLoad):
             )
             self.topic_chains_jax.append(sslm_instance)
 
-        self.gammas: Optional[jnp.ndarray] = None # Variational parameters for doc-topic
+        self.gammas_np: Optional[np.ndarray] = None 
 
         if corpus is not None and time_slice is not None:
-            # Initialize with a standard LDA model (Gensim's)
-            # This part is similar to original LdaSeqModel
             logger.info("Initializing LdaSeqModelJax with a standard LDA model...")
             lda_model_init = ldamodel.LdaModel(
                 corpus,
                 id2word=self.id2word,
                 num_topics=self.num_topics,
-                passes=passes, # from params
-                alpha=self.alphas_np, # from params
-                random_state=np.random.RandomState(random_state_seed), # Gensim LDA uses numpy random state
-                dtype=np.float64, # Gensim LDA typically uses float64
+                passes=passes, 
+                alpha=self.alphas_np, 
+                random_state=self.random_state_np, 
+                dtype=np.float64, 
             )
-            # sstats are (num_terms, num_topics) in original, beta for time 0
-            initial_sstats_beta = np.transpose(lda_model_init.state.sstats) # (vocab_len, num_topics)
+            initial_sstats_beta = np.transpose(lda_model_init.state.sstats) 
             
             self.init_ldaseq_ss_jax(initial_sstats_beta)
-
-            # Fit DTM using JAX SSLM
-            # self.fit_lda_seq_jax(corpus, lda_inference_max_iter, em_min_iter, em_max_iter, chunksize)
-            logger.info("LdaSeqModelJax initialized. Call fit_lda_seq_jax() to train.")
+            logger.info("LdaSeqModelJax initialized. Starting EM training...")
+            self.fit_lda_seq_jax(corpus)
 
 
-    def init_ldaseq_ss_jax(self, init_suffstats_beta: np.ndarray): # (vocab_len, num_topics)
+    def init_ldaseq_ss_jax(self, init_suffstats_beta: np.ndarray): 
         logger.info("Initializing JAX SSLM topic chains...")
         for k, chain_jax in enumerate(self.topic_chains_jax):
-            sstats_for_topic_k = init_suffstats_beta[:, k] # (vocab_len,)
+            sstats_for_topic_k = init_suffstats_beta[:, k] 
             chain_jax.sslm_counts_init_jax(sstats_for_topic_k)
         logger.info("JAX SSLM topic chains initialized.")
 
-    def fit_lda_seq_topics_jax(self, topic_suffstats_all_topics: List[jnp.ndarray]) -> float:
-        """ M-step: Fit the SSLM for each topic. """
+    def make_lda_seq_slice_jax(self, lda_model_instance: ldamodel.LdaModel, time_slice_idx: int) -> ldamodel.LdaModel:
+        """Updates the LDA model's topics with e_log_prob from JAX chains for a specific time slice."""
+        for k_topic in range(self.num_topics):
+            # Convert JAX array to NumPy for Gensim LdaModel
+            e_log_prob_k_t = np.array(self.topic_chains_jax[k_topic].e_log_prob[:, time_slice_idx])
+            lda_model_instance.expElogbeta[:, k_topic] = e_log_prob_k_t # Store log probs
+            # Gensim's LdaModel often works with expElogbeta, but if it needs topics directly:
+            # lda_model_instance.state.sstats[k_topic, :] = np.exp(e_log_prob_k_t) # Or similar update
+        
+        # If LdaModel uses state.get_lambda() or similar, ensure it reflects these values.
+        # For simplicity, we assume direct update of expElogbeta is sufficient for inference.
+        # If LdaModel.inference uses self.state.sstats or self.state.get_lambda(),
+        # those might need to be updated or a custom inference path used.
+        # A common way is to set `lda_model_instance.state.expElogbeta`.
+        # The original `LdaModel.topics` was a property that returned expElogbeta.
+        # Let's assume `lda_model_instance.expElogbeta` is the correct attribute.
+        # If not, this part needs adjustment based on how Gensim's LdaModel uses topic-word distributions.
+        # A safer bet might be to update `lda_model_instance.state.sstats` if that's what inference uses,
+        # or ensure `lda_model_instance.expElogbeta` is correctly used by `LdaPost`.
+        # The original `make_lda_seq_slice` updated `lda.topics` which was a property.
+        # Let's try to update `lda_model_instance.expElogbeta` as it's often used directly.
+        # If `LdaPost` uses `lda.topics[word_id][k]`, this needs to point to the correct log-probabilities.
+        # A simple hack for LdaPost if it reads `lda.topics`:
+        class TempTopics:
+            def __init__(self, exp_e_log_beta_matrix):
+                self.exp_e_log_beta_matrix = exp_e_log_beta_matrix
+            def __getitem__(self, item): # word_id, k_topic
+                word_id, k_topic_idx = item
+                return self.exp_e_log_beta_matrix[word_id, k_topic_idx]
+
+        current_exp_elogbeta = np.zeros((self.vocab_len, self.num_topics), dtype=np.float64)
+        for k_topic in range(self.num_topics):
+             current_exp_elogbeta[:, k_topic] = np.array(self.topic_chains_jax[k_topic].e_log_prob[:, time_slice_idx])
+        
+        # This is a workaround if LdaPost directly accesses lda.topics as a 2D array
+        lda_model_instance.topics = current_exp_elogbeta # type: ignore
+
+        lda_model_instance.alpha = np.copy(self.alphas_np) # Ensure alpha is also set
+        return lda_model_instance
+
+    def lda_seq_infer_jax(self, corpus, current_em_iter: int) -> Tuple[float, np.ndarray, List[np.ndarray]]:
+        """ E-step: Perform inference for document variational parameters (gammas)
+            and collect sufficient statistics for topics using Gensim's LdaModel and LdaPost.
+        """
+        bound = 0.0
+        # Initialize sufficient statistics as list of NumPy arrays
+        topic_suffstats_np = [np.zeros((self.vocab_len, self.num_time_slices), dtype=np.float64) for _ in range(self.num_topics)]
+        
+        # Initialize gammas as NumPy array
+        gammas_np = np.zeros((self.corpus_len, self.num_topics), dtype=np.float64)
+        # lhoods_np = np.zeros((self.corpus_len, self.num_topics + 1), dtype=np.float64) # If needed by LdaPost
+
+        # Setup Gensim LDA model instance for inference for this E-step
+        # We will update its topics for each time slice.
+        lda_inference_model = ldamodel.LdaModel(
+            num_topics=self.num_topics, 
+            alpha=self.alphas_np, 
+            id2word=self.id2word, 
+            dtype=np.float64,
+            # expElogbeta needs to be shaped (num_topics, vocab_len) for Gensim state
+            # or ensure LdaPost uses a (vocab_len, num_topics) view.
+            # For now, we'll shape it (vocab_len, num_topics) and LdaPost might need adjustment
+            # or make_lda_seq_slice_jax handles it.
+        )
+        # Initialize expElogbeta to avoid issues if not set before first use
+        lda_inference_model.expElogbeta = np.zeros((self.num_topics, self.vocab_len), dtype=np.float64)
+
+
+        ldapost_instance = LdaPost(
+            max_doc_len=self.max_doc_len, 
+            num_topics=self.num_topics, 
+            lda=lda_inference_model # Pass the LDA model instance
+        )
+
+        doc_idx_overall = 0
+        current_time_slice_idx = 0
+        docs_in_current_slice = 0
+        
+        # Precompute cumulative time slices for easy checking
+        cumulative_time_slices = np.cumsum(np.array(self.time_slice)) if self.time_slice else np.array([self.corpus_len])
+
+
+        for chunk_no, chunk_docs in enumerate(utils.grouper(corpus, self.chunksize)):
+            for doc_bow in chunk_docs:
+                if doc_bow is None: continue # Handle potential None from grouper
+
+                # Determine current time slice for the document
+                if doc_idx_overall >= cumulative_time_slices[current_time_slice_idx]:
+                    current_time_slice_idx += 1
+                    docs_in_current_slice = 0 # Reset doc counter for new slice
+                    # Update LDA model topics for the new time slice
+                    lda_inference_model = self.make_lda_seq_slice_jax(lda_inference_model, current_time_slice_idx)
+
+                # Prepare LdaPost for the current document
+                ldapost_instance.doc = doc_bow
+                ldapost_instance.gamma = gammas_np[doc_idx_overall] # Use view for current doc's gamma
+                # ldapost_instance.lhood = lhoods_np[doc_idx_overall] # If LdaPost uses this
+
+                # Perform inference for the document
+                # The original LdaPost.fit_lda_post took `ldaseq` (self) as an argument,
+                # which might be used for callbacks or accessing model parameters.
+                # If LdaPost needs access to LdaSeqModelJax instance, pass `self`.
+                # For now, assuming it primarily needs `lda_inference_model`.
+                doc_lhood = ldapost_instance.fit_lda_post(
+                    doc_number=docs_in_current_slice, # doc index within the current time slice
+                    time=current_time_slice_idx,
+                    ldaseq=None, # Or self, if LdaPost expects the main model
+                    lda_inference_max_iter=self.lda_inference_max_iter
+                )
+                
+                bound += doc_lhood
+                gammas_np[doc_idx_overall] = ldapost_instance.gamma # Store updated gamma
+
+                # Accumulate sufficient statistics (LdaPost updates topic_suffstats_np in place)
+                # LdaPost.update_lda_seq_ss expects topic_suffstats as a list of (V,T) arrays
+                topic_suffstats_np = ldapost_instance.update_lda_seq_ss(
+                    time=current_time_slice_idx, 
+                    doc=doc_bow, # doc_bow is already set in ldapost_instance
+                    topic_suffstats=topic_suffstats_np
+                )
+                
+                doc_idx_overall += 1
+                docs_in_current_slice += 1
+        
+        self.gammas_np = gammas_np # Store final gammas
+        return bound, gammas_np, topic_suffstats_np
+
+
+    def fit_lda_seq_topics_jax(self, topic_suffstats_all_topics_jax: List[jnp.ndarray]) -> float:
+        """ M-step: Fit the SSLM for each topic using JAX. """
         total_topic_bound = 0.0
         for k, chain_jax in enumerate(self.topic_chains_jax):
             logger.info(f"Fitting JAX SSLM for topic {k}...")
-            # sstats for topic k, all time slices: (vocab_len, num_time_slices)
-            sstats_k = topic_suffstats_all_topics[k] 
-            # totals for topic k, all time slices: (num_time_slices,)
-            # In original, totals were sum over vocab of sstats for a given time slice.
-            # Assuming sstats_k is (vocab_len, num_time_slices)
-            totals_k = jnp.sum(sstats_k, axis=0)
+            sstats_k_jax = topic_suffstats_all_topics_jax[k] 
+            totals_k_jax = jnp.sum(sstats_k_jax, axis=0)
 
-            lhood_term = chain_jax.fit_sslm_jax(sstats_k, totals_k)
+            lhood_term = chain_jax.fit_sslm_jax(
+                sstats_k_jax, 
+                totals_k_jax,
+                sslm_fit_threshold=self.sslm_convergence_threshold,
+                sslm_max_iter=self.sslm_max_iter_per_topic
+            )
             total_topic_bound += lhood_term
-        return total_topic_bound
+        return float(total_topic_bound) # Ensure float return
 
-    # Placeholder for the E-step. This is complex as it interacts with document processing
-    # and potentially Gensim's LdaModel components for variational inference per document.
-    # def lda_seq_infer_jax(self, corpus, ...):
-    #     """ E-step: Perform inference for document variational parameters (gammas)
-    #         and collect sufficient statistics for topics.
-    #     """
-    #     # ... This would involve iterating through documents, time slices,
-    #     #     performing LDA-like inference for each document given current topic_chains_jax,
-    #     #     and accumulating sufficient statistics (topic_suffstats).
-    #     #     The original LdaPost class logic would need to be adapted or replaced.
-    #     bound = 0.0
-    #     # topic_suffstats = [jnp.zeros((self.vocab_len, self.num_time_slices), dtype=self.dtype) for _ in range(self.num_topics)]
-    #     # gammas = jnp.zeros((num_documents, self.num_topics), dtype=self.dtype)
-    #     # return bound, gammas, topic_suffstats
-    #     raise NotImplementedError("E-step (lda_seq_infer_jax) is not fully implemented.")
+    def fit_lda_seq_jax(self, corpus):
+        """ Main EM training loop for LdaSeqModelJax. """
+        logger.info("Starting LdaSeqModelJax EM training...")
+        
+        # Constants from original fit_lda_seq
+        LOWER_ITER = 10
+        ITER_MULT_LOW = 2
+        MAX_ITER_INF = 500 # Max inference iterations if bound goes down
 
-    # def fit_lda_seq_jax(self, corpus, lda_inference_max_iter, em_min_iter, em_max_iter, chunksize):
-    #     """ Main EM training loop for LdaSeqModelJax. """
-    #     logger.info("Starting LdaSeqModelJax EM training...")
-    #     # ... EM loop structure similar to original ...
-    #     # In each iteration:
-    #     # 1. E-step: Call lda_seq_infer_jax -> get bound_e_step, gammas, topic_suffstats
-    #     # 2. M-step: Call fit_lda_seq_topics_jax(topic_suffstats) -> get bound_m_step
-    #     # 3. Update total bound, check convergence.
-    #     raise NotImplementedError("fit_lda_seq_jax is not fully implemented.")
+        current_lda_inference_max_iter = self.lda_inference_max_iter
+
+        overall_bound = -np.inf # Initialize with a very small number
+        
+        with tqdm.tqdm(total=self.em_max_iter, desc="LdaSeqJax EM Iterations") as pbar:
+            for em_iter_num in range(self.em_max_iter):
+                pbar.update(1)
+                logger.info(f"EM Iteration {em_iter_num + 1}/{self.em_max_iter}")
+                old_overall_bound = overall_bound
+
+                # E-step
+                logger.info("E-Step started...")
+                e_step_bound, _, topic_sstats_np_list = self.lda_seq_infer_jax(
+                    corpus, current_em_iter=em_iter_num
+                )
+                logger.info(f"E-Step finished. Bound from E-step: {e_step_bound}")
+
+                # Convert NumPy sufficient statistics to JAX arrays for M-step
+                topic_sstats_jax_list = [jnp.array(ts_np, dtype=self.dtype) for ts_np in topic_sstats_np_list]
+
+                # M-step
+                logger.info("M-Step started...")
+                m_step_bound = self.fit_lda_seq_topics_jax(topic_sstats_jax_list)
+                logger.info(f"M-Step finished. Bound from M-step (topics): {m_step_bound}")
+                
+                overall_bound = e_step_bound + m_step_bound # Total bound for this EM iteration
+
+                if (overall_bound - old_overall_bound) < 0 and old_overall_bound != -np.inf :
+                    logger.warning(f"Bound decreased from {old_overall_bound} to {overall_bound}!")
+                    if current_lda_inference_max_iter < LOWER_ITER:
+                        current_lda_inference_max_iter *= ITER_MULT_LOW
+                        logger.info(f"Increasing LDA inference iterations to {current_lda_inference_max_iter}")
+                
+                convergence = np.fabs((overall_bound - old_overall_bound) / (old_overall_bound + 1e-9))
+                pbar.set_postfix({"bound": f"{overall_bound:.4f}", "convergence": f"{convergence:.6f}"})
+                logger.info(
+                    f"EM Iteration {em_iter_num + 1} finished. "
+                    f"Total Bound: {overall_bound:.4f}, Convergence: {convergence:.6f}"
+                )
+
+                if em_iter_num >= self.em_min_iter and convergence < LDASQE_EM_THRESHOLD_JAX:
+                    if current_lda_inference_max_iter >= MAX_ITER_INF: # Already at max inf iter
+                        logger.info("Convergence threshold reached. Stopping EM.")
+                        break
+                    else: # Increase inference iterations for final passes
+                        logger.info(f"Convergence near, increasing inference iterations to {MAX_ITER_INF} for final passes.")
+                        current_lda_inference_max_iter = MAX_ITER_INF
+                        # Reset convergence to ensure at least one more iteration with max_inf_iter
+                        # Or, add a flag to indicate "final passes mode"
+                        # For simplicity, we'll let it run up to em_max_iter if threshold met early
+                        # and inference_max_iter was increased.
+            else: # Loop finished without break
+                if em_iter_num < self.em_max_iter -1: # Did not complete all em_max_iter
+                     logger.info("EM loop finished due to reaching convergence criterion.")
+                else: # Completed all em_max_iter
+                     logger.info(f"EM loop finished after {self.em_max_iter} iterations.")
+        return overall_bound
+
 
     def print_topic_times_jax(self, topic_idx: int, top_terms: int = 10) -> List[List[Tuple[str, float]]]:
         """ Print topic evolution over time for a given topic_idx. """
         if not self.id2word:
             logger.warning("id2word not available, cannot print topics with words.")
             return []
+        if not (0 <= topic_idx < self.num_topics):
+            logger.error(f"Invalid topic_idx {topic_idx}. Must be between 0 and {self.num_topics-1}.")
+            return []
         
         chain = self.topic_chains_jax[topic_idx]
-        # chain.e_log_prob is (vocab_len, num_time_slices)
-        # Convert to numpy for easier processing with id2word
-        e_log_prob_np = np.array(chain.e_log_prob) # JAX array to NumPy
+        e_log_prob_np = np.array(chain.e_log_prob) 
         
         topics_over_time = []
         for t in range(self.num_time_slices):
             log_probs_t = e_log_prob_np[:, t]
-            # Normalize to get probabilities (exp and sum)
-            probs_t = np.exp(log_probs_t)
+            # Probs for display, not necessarily the same as model's internal representation if using log-probs
+            probs_t = np.exp(log_probs_t - np.max(log_probs_t)) # Softmax for stability
             probs_t /= np.sum(probs_t)
             
             best_n_indices = np.argsort(probs_t)[::-1][:top_terms]
-            topic_terms = [(self.id2word[idx], float(probs_t[idx])) for idx in best_n_indices]
+            topic_terms = [(self.id2word[idx], float(probs_t[idx])) for idx in best_n_indices if idx in self.id2word]
             topics_over_time.append(topic_terms)
         return topics_over_time
 
-    # Other methods like __getitem__, doc_topics, etc., would need adaptation.
+    def print_topics_jax(self, time_slice_idx: int = 0, top_terms: int = 10) -> List[List[Tuple[str, float]]]:
+        """ Print topics for a specific time slice. """
+        if not (0 <= time_slice_idx < self.num_time_slices):
+            logger.error(f"Invalid time_slice_idx {time_slice_idx}. Must be between 0 and {self.num_time_slices-1}.")
+            return [[] for _ in range(self.num_topics)]
+        
+        all_topics_at_time = []
+        for topic_idx in range(self.num_topics):
+            topic_description_at_time = self.print_topic_jax(topic_idx, time_slice_idx, top_terms)
+            all_topics_at_time.append(topic_description_at_time)
+        return all_topics_at_time
 
-# Example of how LdaPost might be used or adapted if E-step is complex
-# class LdaPostJax(utils.SaveLoad):
-#    ... (This would be a JAX/Numpy hybrid if interacting with Gensim LDA for E-step)
+    def print_topic_jax(self, topic_idx: int, time_slice_idx: int = 0, top_terms: int = 10) -> List[Tuple[str, float]]:
+        """ Print a single topic for a specific time slice. """
+        if not self.id2word:
+            logger.warning("id2word not available, cannot print topic with words.")
+            return []
+        if not (0 <= topic_idx < self.num_topics):
+            logger.error(f"Invalid topic_idx {topic_idx}.")
+            return []
+        if not (0 <= time_slice_idx < self.num_time_slices):
+            logger.error(f"Invalid time_slice_idx {time_slice_idx}.")
+            return []
+
+        chain = self.topic_chains_jax[topic_idx]
+        e_log_prob_topic_time = np.array(chain.e_log_prob[:, time_slice_idx])
+
+        probs_topic_time = np.exp(e_log_prob_topic_time - np.max(e_log_prob_topic_time))
+        probs_topic_time /= np.sum(probs_topic_time)
+
+        best_n_indices = np.argsort(probs_topic_time)[::-1][:top_terms]
+        topic_terms = [(self.id2word[idx], float(probs_topic_time[idx])) for idx in best_n_indices if idx in self.id2word]
+        return topic_terms
+
+    def __getitem__(self, doc_bow: List[Tuple[int, int]], lda_inference_max_iter: Optional[int] = None) -> np.ndarray:
+        """ Get topic distribution for a new document. """
+        if lda_inference_max_iter is None:
+            lda_inference_max_iter = self.lda_inference_max_iter
+
+        # Setup a temporary LDA model for inference
+        lda_inf_model = ldamodel.LdaModel(
+            num_topics=self.num_topics, 
+            alpha=self.alphas_np, 
+            id2word=self.id2word, 
+            dtype=np.float64
+        )
+        lda_inf_model.expElogbeta = np.zeros((self.num_topics, self.vocab_len), dtype=np.float64)
+
+
+        # LdaPost for the new document
+        doc_max_len = len(doc_bow) if doc_bow else 0
+        ldapost_new_doc = LdaPost(
+            doc=doc_bow, 
+            lda=lda_inf_model, 
+            max_doc_len=doc_max_len, 
+            num_topics=self.num_topics
+        )
+        
+        # Average topic distribution over time slices, or use a specific one?
+        # Original __getitem__ iterates all time slices and averages likelihoods/gammas.
+        # This seems complex for a single doc inference without a time context.
+        # A more common approach for DTM with a new doc is to infer against topics of a *specific* time slice.
+        # Let's infer against the topics of the *last* time slice as a default.
+        target_time_slice = self.num_time_slices - 1
+        if target_time_slice < 0:
+            logger.error("Model has no time slices to infer against.")
+            return np.full(self.num_topics, 1.0/self.num_topics, dtype=np.float64)
+
+        lda_inf_model = self.make_lda_seq_slice_jax(lda_inf_model, target_time_slice)
+        
+        _ = ldapost_new_doc.fit_lda_post(
+            doc_number=0, # Only one doc
+            time=target_time_slice, 
+            ldaseq=None, # Not in full EM context
+            lda_inference_max_iter=lda_inference_max_iter
+        )
+        
+        gamma_new_doc = ldapost_new_doc.gamma
+        doc_topic_dist = gamma_new_doc / np.sum(gamma_new_doc)
+        return doc_topic_dist
 
