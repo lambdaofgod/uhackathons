@@ -1,46 +1,56 @@
 import gradio as gr
+import pandas as pd
+import json
 
 # Assuming app.py and data_loading.py are in the same directory 'textmap'
 # and you run the app from the parent directory of 'textmap' (e.g., python -m textmap.app)
 # or from within 'textmap' (e.g., python app.py)
 from textmap.data_loading import load_and_preprocess_data
 
-def load_column_names(file_path):
+def load_file_preview(file_path):
     """
-    Load column names from a CSV or JSONL file
+    Load a preview of the file and return column names and a sample
     
     Args:
         file_path: The uploaded file object from Gradio
         
     Returns:
-        tuple: Lists of column names for text, title, date dropdowns and file format
+        tuple: Lists of column names, preview dataframe, and file format
     """
     if file_path is None:
-        return [], [], [], None
+        return [], None, None
     
     file_ext = file_path.name.split('.')[-1].lower()
     
-    if file_ext == 'jsonl':
-        import json
-        with open(file_path.name, 'r') as f:
-            # Read first line to get keys
-            first_line = f.readline().strip()
-            if first_line:
-                data = json.loads(first_line)
-                columns = list(data.keys())
-                return columns, columns, columns, "jsonl"
-    elif file_ext == 'csv':
-        import pandas as pd
-        df = pd.read_csv(file_path.name, nrows=1)
-        columns = df.columns.tolist()
-        return columns, columns, columns, "csv"
-    
-    return [], [], [], None
+    try:
+        if file_ext == 'jsonl':
+            # Read a few lines for preview
+            with open(file_path.name, 'r') as f:
+                lines = [f.readline().strip() for _ in range(5)]
+                data = [json.loads(line) for line in lines if line]
+                
+            if not data:
+                return [], None, None
+                
+            # Create a DataFrame from the sample
+            preview_df = pd.DataFrame(data)
+            columns = list(preview_df.columns)
+            return columns, preview_df.head(5), "jsonl"
+            
+        elif file_ext == 'csv':
+            preview_df = pd.read_csv(file_path.name, nrows=5)
+            columns = list(preview_df.columns)
+            return columns, preview_df, "csv"
+        
+        return [], None, None
+    except Exception as e:
+        return [], f"Error loading file: {str(e)}", None
 
 with gr.Blocks() as demo:
     gr.Markdown("# Dynamic Topic Modeling Visualization")
 
-    # Gradio State to store the loaded and preprocessed DataFrame
+    # Gradio State to store the file path and format
+    file_info = gr.State(None)
     df_state = gr.State(None)
 
     with gr.Row():
@@ -51,41 +61,69 @@ with gr.Blocks() as demo:
                 file_types=[".jsonl", ".csv"],
             )
             
-            text_column = gr.Dropdown(label="Text Column", choices=[], interactive=True)
-            title_column = gr.Dropdown(label="Title Column", choices=[], interactive=True)
-            date_column = gr.Dropdown(label="Date Column", choices=[], interactive=True)
+            # Preview of the data
+            preview_output = gr.DataFrame(label="Data Preview", visible=False)
+            
+            text_column = gr.Dropdown(label="Text Column", choices=[], interactive=True, visible=False)
+            title_column = gr.Dropdown(label="Title Column", choices=[], interactive=True, visible=False)
+            date_column = gr.Dropdown(label="Date Column", choices=[], interactive=True, visible=False)
             
             granularity_input = gr.Radio(
                 label="Time Granularity",
                 choices=["day", "week", "month"],
                 value="month",
+                visible=False
             )
-            submit_button = gr.Button("Visualize Topics")
+            submit_button = gr.Button("Visualize Topics", visible=False)
 
         with gr.Column(scale=3):  # Main content area
             gr.Markdown("## Topic Visualization")
             output_display = gr.Textbox(
                 label="Status", interactive=False
             )  # Placeholder for status messages
-            # Optional: A DataFrame component to display parts of the loaded data for debugging
-            # df_debug_output = gr.DataFrame(label="Loaded Data Sample")
     
-    # Connect file upload to column selection
+    # Connect file upload to preview and column selection
     file_input.change(
-        fn=load_column_names,
+        fn=load_file_preview,
         inputs=[file_input],
-        outputs=[text_column, title_column, date_column]
+        outputs=[
+            text_column, 
+            preview_output,
+            file_info
+        ],
+        # Show the UI elements after file upload
+        _js="""
+        function(data) {
+            // Make elements visible after file upload
+            document.querySelectorAll('[id$="text_column"], [id$="title_column"], [id$="date_column"], [id$="granularity_input"], [id$="submit_button"], [id$="preview_output"]').forEach(el => {
+                el.style.display = 'block';
+            });
+            return data;
+        }
+        """
+    )
+    
+    # Update visibility after file upload
+    def update_visibility(columns, preview, file_format):
+        return {
+            text_column: gr.update(choices=columns, visible=True),
+            title_column: gr.update(choices=columns, visible=True),
+            date_column: gr.update(choices=columns, visible=True),
+            preview_output: gr.update(value=preview, visible=True),
+            granularity_input: gr.update(visible=True),
+            submit_button: gr.update(visible=True)
+        }
+    
+    file_input.change(
+        fn=update_visibility,
+        inputs=[text_column, preview_output, file_info],
+        outputs=[text_column, title_column, date_column, preview_output, granularity_input, submit_button]
     )
 
     submit_button.click(
         fn=load_and_preprocess_data,
         inputs=[file_input, granularity_input, text_column, title_column, date_column],
-        # load_and_preprocess_data returns (status_message, df_or_none)
-        # We map these to output_display and df_state respectively
         outputs=[output_display, df_state],
-        # If using df_debug_output, you might need an intermediate function
-        # or adjust load_and_preprocess_data to return a sample for display
-        # For now, df_state will hold the full DataFrame.
     )
 
 if __name__ == "__main__":
