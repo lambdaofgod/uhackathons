@@ -273,8 +273,12 @@ class sslm_jax(utils.SaveLoad):
 
         self.obs = jnp.array(np.tile(log_norm_counts[:, np.newaxis], (1, T)), dtype=self.dtype)
 
+        # Compute post variance (vmapped)
+        # The first argument to jax_compute_post_variance_scan is a placeholder for vmap.
+        # in_axes=(0, None, None, None, None) means map over the first dim of jnp.arange(W)
+        # and broadcast the other arguments.
         vmap_compute_var = jax.vmap(
-            jax_compute_post_variance_scan, in_axes=(None, None, None, None, None), out_axes=0
+            jax_compute_post_variance_scan, in_axes=(0, None, None, None, None), out_axes=0
         )
         all_vars, all_fwd_vars = vmap_compute_var(
             jnp.arange(W), self.obs_variance, self.chain_variance, T, self.dtype
@@ -282,6 +286,7 @@ class sslm_jax(utils.SaveLoad):
         self.variance = all_vars
         self.fwd_variance = all_fwd_vars
         
+        # Compute post mean (vmapped)
         vmap_compute_mean = jax.vmap(
             jax_compute_post_mean_scan, in_axes=(0, 0, None, None, None), out_axes=0
         )
@@ -407,8 +412,12 @@ class sslm_jax(utils.SaveLoad):
         W = self.vocab_len
         T = self.num_time_slices
         
+        # Compute post variance (vmapped)
+        # The first argument to jax_compute_post_variance_scan is a placeholder for vmap.
+        # in_axes=(0, None, None, None, None) means map over the first dim of jnp.arange(W)
+        # and broadcast the other arguments.
         vmap_compute_var = jax.vmap(
-            jax_compute_post_variance_scan, in_axes=(None, None, None, None, None), out_axes=0
+            jax_compute_post_variance_scan, in_axes=(0, None, None, None, None), out_axes=0
         )
         all_vars, all_fwd_vars = vmap_compute_var(
             jnp.arange(W), self.obs_variance, self.chain_variance, T, self.dtype
