@@ -6,6 +6,7 @@ import json
 # and you run the app from the parent directory of 'textmap' (e.g., python -m textmap.app)
 # or from within 'textmap' (e.g., python app.py)
 from textmap.data_loading import load_and_preprocess_data
+from textmap.dynamic_topic_models import DynamicTopicModel
 
 
 def load_file_preview(file_path):
@@ -51,9 +52,10 @@ def load_file_preview(file_path):
 with gr.Blocks() as demo:
     gr.Markdown("# Dynamic Topic Modeling Visualization")
 
-    # Gradio State to store the file path and format
+    # Gradio State to store the file path, format, and model
     file_info = gr.State(None)
     df_state = gr.State(None)
+    model_state = gr.State(None)
 
     with gr.Row():
         with gr.Column(scale=1, min_width=300):  # Left sidebar
@@ -90,6 +92,14 @@ with gr.Blocks() as demo:
             output_display = gr.Textbox(
                 label="Status", interactive=False
             )  # Placeholder for status messages
+            
+            # Add a table to display topics
+            topics_table = gr.DataFrame(
+                label="Topics Over Time",
+                headers=["Time Period", "Topic ID", "Top Terms"],
+                interactive=False,
+                visible=False
+            )
 
     # Connect preview button to load file preview
     def load_file_preview_and_update_ui(file_path):
@@ -207,10 +217,47 @@ with gr.Blocks() as demo:
         outputs=[text_column, title_column, date_column, preview_output, column_selection_group, file_info, preview_status]
     )
 
+    # Function to train the model and display topics
+    def train_and_display_topics(file_input, granularity, text_col, title_col, date_col):
+        # First load and preprocess the data
+        status_message, df = load_and_preprocess_data(file_input, granularity, text_col, title_col, date_col)
+        
+        if df is None:
+            return status_message, None, None, gr.update(visible=False)
+        
+        try:
+            # Create and train the dynamic topic model
+            model = DynamicTopicModel(
+                num_topics=10,  # You could make this configurable
+                text_col="text",  # Use the standardized text column
+                period_col="time_period"  # Use the time_period column from data_loading
+            )
+            
+            model.fit(df)
+            
+            # Get topics for all time periods
+            topics_df = model.get_topics()
+            
+            # Format the DataFrame for display
+            display_df = topics_df.rename(columns={
+                "time_period": "Time Period",
+                "topic_id": "Topic ID",
+                "terms": "Top Terms"
+            })
+            
+            return (
+                f"{status_message}\nSuccessfully trained topic model with {model.num_topics} topics.",
+                df,
+                model,
+                gr.update(visible=True, value=display_df)
+            )
+        except Exception as e:
+            return f"{status_message}\nError training topic model: {str(e)}", df, None, gr.update(visible=False)
+
     submit_button.click(
-        fn=load_and_preprocess_data,
+        fn=train_and_display_topics,
         inputs=[file_input, granularity_input, text_column, title_column, date_column],
-        outputs=[output_display, df_state],
+        outputs=[output_display, df_state, model_state, topics_table],
     )
 
 if __name__ == "__main__":
