@@ -18,8 +18,8 @@ class OrgElement(BaseModel):
     body: str
     links: List[str]
     text: str
-    creation_date: Optional[datetime.datetime] = None
-    last_edit_date: Optional[datetime.datetime] = None
+    creation_date: datetime.datetime
+    last_edit_date: datetime.datetime
 
     @classmethod
     def get_org_node_elements(cls, file_name, file_node, file_path=None, only_root_contents=False):
@@ -101,8 +101,8 @@ class OrgElement(BaseModel):
             try:
                 return datetime.datetime.strptime(date_str, '%Y%m%d%H%M%S')
             except ValueError:
-                return None
-        return None
+                return datetime.datetime.now()
+        return datetime.datetime.now()
 
     @staticmethod
     def _get_last_edit_date(file_path):
@@ -111,7 +111,7 @@ class OrgElement(BaseModel):
             mtime = os.path.getmtime(file_path)
             return datetime.datetime.fromtimestamp(mtime)
         except (OSError, ValueError):
-            return None
+            return datetime.datetime.now()
 
 
 class Org:
