@@ -246,6 +246,11 @@ class DynamicTopicModel:
         if time_periods is None:
             time_periods = list(range(len(self.time_slices)))
 
+        # Initialize variables that might be referenced in error handling
+        topics = None
+        topic_id = None
+        topic_terms = None
+        
         try:
             # Create a list to store all topic data
             all_topics_data = []
@@ -283,7 +288,13 @@ class DynamicTopicModel:
             import traceback
             error_trace = traceback.format_exc()
             print(f"Error in get_topics:\n{error_trace}")
-            raise RuntimeError(f"Failed to get topics: {e}\nVariable types: topics={type(topics)}, topic_id={type(topic_id)}, topic_terms={type(topic_terms)}\nFull traceback:\n{error_trace}")
+            
+            # Safely report variable types
+            topics_type = type(topics).__name__ if topics is not None else "None"
+            topic_id_type = type(topic_id).__name__ if topic_id is not None else "None"
+            topic_terms_type = type(topic_terms).__name__ if topic_terms is not None else "None"
+            
+            raise RuntimeError(f"Failed to get topics: {e}\nVariable types: topics={topics_type}, topic_id={topic_id_type}, topic_terms={topic_terms_type}\nFull traceback:\n{error_trace}")
 
 
 if __name__ == "__main__":
