@@ -149,10 +149,11 @@ class DynamicTopicModel:
         # Get topic distribution
         if time_idx is not None and 0 <= time_idx < len(self.time_slices):
             # Use time-specific topics if time_idx is provided
-            topic_dist = self.lda_seq_model.dtm_vis[time_idx][self.lda_seq_model.id2word.doc2bow(tokenized_doc)]
+            # Access the model's topic distribution for the specific time
+            topic_dist = self.lda_seq_model.get_document_topics(bow, time=time_idx)
         else:
             # Otherwise use the general model
-            topic_dist = self.lda_seq_model[bow]
+            topic_dist = self.lda_seq_model.get_document_topics(bow)
             
         return topic_dist
     
@@ -222,7 +223,8 @@ if __name__ == '__main__':
     # 2. Initialize and fit the DynamicTopicModel
     try:
         # Create model with 2 topics
-        dtm = DynamicTopicModel(num_topics=2, text_col='text', period_col='period')
+        dtm = DynamicTopicModel(num_topics=2, text_col='text', period_col='period', 
+                               chain_variance=0.005, passes=10)  # Add parameters to improve convergence
         
         # Fit the model (this will train the LdaSeqModel internally)
         dtm.fit(sample_df)
@@ -230,7 +232,10 @@ if __name__ == '__main__':
         # 3. Transform data to get topic distributions
         topic_distributions = dtm.transform(sample_df)
         print(f"\nSample topic distribution for first document:")
-        print(topic_distributions[0])
+        if topic_distributions and len(topic_distributions) > 0:
+            print(topic_distributions[0])
+        else:
+            print("No topic distributions returned")
         
         # 4. Get topics for a specific time slice
         try:
@@ -240,6 +245,8 @@ if __name__ == '__main__':
                 print(f"Topic {topic_idx}: {terms}")
         except Exception as e:
             print(f"Could not print topics: {e}")
+            import traceback
+            traceback.print_exc()
             
     except Exception as e:
         print(f"Error in example: {e}")
