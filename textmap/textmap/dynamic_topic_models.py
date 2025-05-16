@@ -172,8 +172,6 @@ class DynamicTopicModel:
             print(f"Error in document transformation: {e}")
             # Return empty list in case of error
             return []
-        
-        return topic_dist
     
     def transform(self, df: pd.DataFrame) -> List[List[Tuple[int, float]]]:
         """
@@ -224,62 +222,4 @@ class DynamicTopicModel:
             raise RuntimeError(f"Failed to get topics: {e}")
 
 if __name__ == '__main__':
-    # Example Usage with the updated implementation
-    from gensim.test.utils import common_texts
-    
-    # 1. Prepare sample data for three time slices
-    texts_t0 = [doc for doc in common_texts[:3]]
-    texts_t1 = [doc for doc in common_texts[3:6]]
-    texts_t2 = [doc for doc in common_texts[6:]]
-    all_texts = texts_t0 + texts_t1 + texts_t2
-    
-    # Create a DataFrame
-    periods = [0]*len(texts_t0) + [1]*len(texts_t1) + [2]*len(texts_t2)
-    data = {'text': [" ".join(doc) for doc in all_texts], 'period': periods}
-    sample_df = pd.DataFrame(data)
-    
-    # 2. Initialize and fit the DynamicTopicModel
-    try:
-        # Create model with 2 topics and parameters to improve convergence
-        dtm = DynamicTopicModel(
-            num_topics=2, 
-            text_col='text', 
-            period_col='period',
-            chain_variance=0.005,  # Lower chain variance for more stable topics
-            passes=10,             # Fewer passes to speed up example
-            em_min_iter=2,         # Minimum EM iterations
-            em_max_iter=10,        # Maximum EM iterations
-            lda_inference_max_iter=5  # Maximum inference iterations
-        )
-        
-        # Fit the model (this will train the LdaSeqModel internally)
-        dtm.fit(sample_df)
-        
-        # 3. Transform data to get topic distributions
-        print("\nTransforming documents to get topic distributions...")
-        topic_distributions = dtm.transform(sample_df)
-        
-        print(f"\nSample topic distribution for first document:")
-        if topic_distributions and len(topic_distributions) > 0:
-            # Print in a more readable format
-            print(f"Document: '{sample_df.iloc[0][dtm.text_col]}'")
-            print("Topic distribution:")
-            for topic_id, prob in topic_distributions[0]:
-                print(f"  Topic {topic_id}: {prob:.4f}")
-        else:
-            print("No topic distributions returned")
-        
-        # 4. Get topics for a specific time slice
-        try:
-            topics_at_time_0 = dtm.get_topics(time=0, top_terms=5)
-            print("\nTopics at time=0:")
-            for topic_idx, terms in topics_at_time_0:
-                print(f"Topic {topic_idx}: {terms}")
-        except Exception as e:
-            print(f"Could not print topics: {e}")
-            import traceback
-            traceback.print_exc()
-            
-    except Exception as e:
-        print(f"Error in example: {e}")
-        print("This example requires a properly setup LdaSeqModel training environment.")
+    print("DynamicTopicModel module loaded. Run tests to verify functionality.")
