@@ -147,14 +147,21 @@ class DynamicTopicModel:
         bow = self.id2word.doc2bow(tokenized_doc)
         
         # Get topic distribution
+        # LdaSeqModel doesn't have get_document_topics method
+        # Instead, we need to use doc_topics method which returns gamma matrix
         if time_idx is not None and 0 <= time_idx < len(self.time_slices):
-            # Use time-specific topics if time_idx is provided
-            # Access the model's topic distribution for the specific time
-            topic_dist = self.lda_seq_model.get_document_topics(bow, time=time_idx)
+            # For a specific time slice
+            gamma = self.lda_seq_model.doc_topics(bow, time=time_idx)
         else:
-            # Otherwise use the general model
-            topic_dist = self.lda_seq_model.get_document_topics(bow)
-            
+            # Default to the first time slice if not specified
+            gamma = self.lda_seq_model.doc_topics(bow, time=0)
+        
+        # Convert gamma vector to (topic_id, probability) format
+        topic_dist = [(topic_id, float(gamma[topic_id])) for topic_id in range(len(gamma))]
+        
+        # Sort by probability in descending order
+        topic_dist.sort(key=lambda x: x[1], reverse=True)
+        
         return topic_dist
     
     def transform(self, df: pd.DataFrame) -> List[List[Tuple[int, float]]]:
@@ -222,18 +229,31 @@ if __name__ == '__main__':
     
     # 2. Initialize and fit the DynamicTopicModel
     try:
-        # Create model with 2 topics
-        dtm = DynamicTopicModel(num_topics=2, text_col='text', period_col='period', 
-                               chain_variance=0.005, passes=10)  # Add parameters to improve convergence
+        # Create model with 2 topics and parameters to improve convergence
+        dtm = DynamicTopicModel(
+            num_topics=2, 
+            text_col='text', 
+            period_col='period',
+            chain_variance=0.005,  # Lower chain variance for more stable topics
+            passes=20,             # More passes for better convergence
+            em_min_iter=6,         # Minimum EM iterations
+            em_max_iter=20         # Maximum EM iterations
+        )
         
         # Fit the model (this will train the LdaSeqModel internally)
         dtm.fit(sample_df)
         
         # 3. Transform data to get topic distributions
+        print("\nTransforming documents to get topic distributions...")
         topic_distributions = dtm.transform(sample_df)
+        
         print(f"\nSample topic distribution for first document:")
         if topic_distributions and len(topic_distributions) > 0:
-            print(topic_distributions[0])
+            # Print in a more readable format
+            print(f"Document: '{sample_df.iloc[0][dtm.text_col]}'")
+            print("Topic distribution:")
+            for topic_id, prob in topic_distributions[0]:
+                print(f"  Topic {topic_id}: {prob:.4f}")
         else:
             print("No topic distributions returned")
         
