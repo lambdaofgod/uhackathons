@@ -93,10 +93,38 @@ with gr.Blocks() as demo:
 
     # Connect preview button to load file preview
     def update_ui_after_preview(columns, preview, file_format, status):
+        # Only set default values if they exist in the columns list
+        default_text = columns[0] if columns else None
+        default_title = columns[0] if columns else None
+        default_date = columns[0] if columns else None
+        
+        # Try to make intelligent guesses for column selection
+        if columns:
+            # Look for common text column names
+            text_candidates = ['text', 'body', 'content', 'description']
+            for candidate in text_candidates:
+                if candidate in columns:
+                    default_text = candidate
+                    break
+                    
+            # Look for common title column names
+            title_candidates = ['title', 'heading', 'name', 'subject']
+            for candidate in title_candidates:
+                if candidate in columns:
+                    default_title = candidate
+                    break
+                    
+            # Look for common date column names
+            date_candidates = ['date', 'created_at', 'timestamp', 'time']
+            for candidate in date_candidates:
+                if candidate in columns:
+                    default_date = candidate
+                    break
+        
         return {
-            text_column: gr.update(choices=columns, value=columns[0] if columns else None),
-            title_column: gr.update(choices=columns, value=columns[0] if columns else None),
-            date_column: gr.update(choices=columns, value=columns[0] if columns else None),
+            text_column: gr.update(choices=columns, value=default_text),
+            title_column: gr.update(choices=columns, value=default_title),
+            date_column: gr.update(choices=columns, value=default_date),
             preview_output: gr.update(value=preview),
             column_selection_group: gr.update(visible=preview is not None),
             preview_status: status
