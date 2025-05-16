@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from typing import List, Sequence, Optional
 from pydantic import BaseModel
 import re
 import pandas as pd
@@ -6,6 +6,8 @@ import logging
 from pathlib import Path
 import orgparse
 import glob
+import os
+import datetime
 
 
 class OrgElement(BaseModel):
@@ -16,10 +18,26 @@ class OrgElement(BaseModel):
     body: str
     links: List[str]
     text: str
+    creation_date: Optional[datetime.datetime] = None
+    last_edit_date: Optional[datetime.datetime] = None
 
     @classmethod
-    def get_org_node_elements(cls, file_name, file_node, only_root_contents=False):
-        root_element = cls.get_root_node_element(file_node, file_name, only_root_contents)
+    def get_org_node_elements(cls, file_name, file_node, file_path=None, only_root_contents=False):
+        # Extract creation date from filename
+        creation_date = cls._extract_creation_date(file_name)
+        
+        # Extract last edit date from file mtime if file_path is provided
+        last_edit_date = None
+        if file_path:
+            last_edit_date = cls._get_last_edit_date(file_path)
+        
+        root_element = cls.get_root_node_element(
+            file_node, 
+            file_name, 
+            only_root_contents,
+            creation_date=creation_date,
+            last_edit_date=last_edit_date
+        )
         if only_root_contents:
             return [root_element]
         else:
@@ -30,7 +48,8 @@ class OrgElement(BaseModel):
             return [root_element] + children_elements
 
     @classmethod
-    def get_root_node_element(cls, file_node, file_name=None, only_root_contents=False):
+    def get_root_node_element(cls, file_node, file_name=None, only_root_contents=False, 
+                             creation_date=None, last_edit_date=None):
         org_id = file_node.properties["ID"]
         if file_name is None:
             file_name = file_node.body.replace("#+title: ", "").strip()
@@ -43,7 +62,9 @@ class OrgElement(BaseModel):
             level=file_node.level,
             body=file_node.body,
             links=all_links,
-            text=cls._get_root_contents(file_node, only_root_contents)
+            text=cls._get_root_contents(file_node, only_root_contents),
+            creation_date=creation_date,
+            last_edit_date=last_edit_date
         )
 
     @classmethod
@@ -62,12 +83,35 @@ class OrgElement(BaseModel):
             level=child_node.level,
             body=child_node.body,
             links=cls.parse_links(str(child_node)),
-            text=child_node.heading + "\n" + child_node.body
+            text=child_node.heading + "\n" + child_node.body,
+            creation_date=root_element.creation_date,
+            last_edit_date=root_element.last_edit_date
         )
 
     @classmethod
     def parse_links(cls, content):
         return re.findall(r'(?<=\[\[id:)([a-zA-Z0-9\-]+)(?=\]\[)', content)
+        
+    @staticmethod
+    def _extract_creation_date(file_name):
+        """Extract creation date from filenames like '20240207133304-paradox_games'"""
+        match = re.match(r'^(\d{14})-', file_name)
+        if match:
+            date_str = match.group(1)
+            try:
+                return datetime.datetime.strptime(date_str, '%Y%m%d%H%M%S')
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _get_last_edit_date(file_path):
+        """Get the last modification time of the file and convert to datetime"""
+        try:
+            mtime = os.path.getmtime(file_path)
+            return datetime.datetime.fromtimestamp(mtime)
+        except (OSError, ValueError):
+            return None
 
 
 class Org:
@@ -76,11 +120,21 @@ class Org:
     @classmethod
     def load(cls, org_path, only_root_contents) -> List[OrgElement]:
         file_name = Path(org_path).stem
-        return cls.element_cls.get_org_node_elements(file_name, orgparse.load(org_path), only_root_contents)
+        return cls.element_cls.get_org_node_elements(
+            file_name, 
+            orgparse.load(org_path), 
+            file_path=org_path,
+            only_root_contents=only_root_contents
+        )
 
     @classmethod
-    def loads(cls, org_contents, only_root_contents, file_name=None) -> List[OrgElement]:
-        return cls.element_cls.get_org_node_elements(file_name, orgparse.loads(org_contents), only_root_contents)
+    def loads(cls, org_contents, only_root_contents, file_name=None, file_path=None) -> List[OrgElement]:
+        return cls.element_cls.get_org_node_elements(
+            file_name, 
+            orgparse.loads(org_contents), 
+            file_path=file_path,
+            only_root_contents=only_root_contents
+        )
 
     @classmethod
     def load_dir_generator(cls, dir, only_root_contents) -> Sequence[OrgElement]:
