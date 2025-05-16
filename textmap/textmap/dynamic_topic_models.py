@@ -217,7 +217,21 @@ class DynamicTopicModel:
             raise RuntimeError("The LdaSeqModel is not initialized. Call fit() first or provide a model.")
             
         try:
-            return self.lda_seq_model.print_topics(time=time, top_terms=top_terms)
+            # Get topics from the model
+            topics = self.lda_seq_model.print_topics(time=time, top_terms=top_terms)
+            
+            # Convert to the expected format: list of (topic_id, terms_string) tuples
+            formatted_topics = []
+            for topic_id, topic_terms in enumerate(topics):
+                # Convert the list of term-weight tuples to a string
+                if isinstance(topic_terms, list):
+                    terms_str = " + ".join([f"{weight:.3f}*{term}" for term, weight in topic_terms])
+                    formatted_topics.append((topic_id, terms_str))
+                else:
+                    # If already in the expected format, use as is
+                    formatted_topics.append((topic_id, topic_terms))
+            
+            return formatted_topics
         except Exception as e:
             raise RuntimeError(f"Failed to get topics: {e}")
 
