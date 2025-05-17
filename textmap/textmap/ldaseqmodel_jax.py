@@ -485,6 +485,80 @@ def process_single_word(
     # Return updated values
     return final_obs, new_mean, new_fwd_mean, new_cache
 
+@partial(jax.jit, static_argnums=(2,))
+def process_vocabulary(
+    sstats, totals, num_time_slices, 
+    obs, mean, fwd_mean, variance, fwd_variance,
+    chain_variance, obs_variance, zeta
+):
+    """JIT-compiled function to process the entire vocabulary.
+    
+    This function handles the optimization of obs values for all words
+    and updates the corresponding mean and fwd_mean values.
+    
+    Parameters
+    ----------
+    sstats : jnp.ndarray
+        Sufficient statistics for all words
+    totals : jnp.ndarray
+        Total counts for each time slice
+    num_time_slices : int
+        Number of time slices
+    obs : jnp.ndarray
+        Current obs values for all words
+    mean : jnp.ndarray
+        Current mean values for all words
+    fwd_mean : jnp.ndarray
+        Current forward mean values for all words
+    variance : jnp.ndarray
+        Current variance values for all words
+    fwd_variance : jnp.ndarray
+        Current forward variance values for all words
+    chain_variance : float
+        Chain variance parameter
+    obs_variance : float
+        Observation variance parameter
+    zeta : jnp.ndarray
+        Current zeta values
+        
+    Returns
+    -------
+    Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
+        Updated obs, mean, and fwd_mean arrays
+    """
+    # Initialize cache for low-norm words
+    norm_cutoff_obs_cache = None
+    vocab_len = obs.shape[0]
+    
+    # Process words one at a time
+    for w_idx in range(vocab_len):
+        word_counts_w = sstats[w_idx, :]
+        
+        # Process this word
+        updated_obs_w, updated_mean_w, updated_fwd_mean_w, new_cache = process_single_word(
+            w_idx,
+            obs,
+            mean,
+            fwd_mean,
+            variance,
+            fwd_variance,
+            word_counts_w,
+            num_time_slices,
+            chain_variance,
+            obs_variance,
+            totals,
+            zeta,
+            norm_cutoff_obs_cache
+        )
+        
+        # Update the arrays
+        obs = obs.at[w_idx].set(updated_obs_w)
+        mean = mean.at[w_idx].set(updated_mean_w)
+        fwd_mean = fwd_mean.at[w_idx].set(updated_fwd_mean_w)
+        norm_cutoff_obs_cache = new_cache
+    
+    return obs, mean, fwd_mean
+
 def update_obs_jax(
     sslm, sstats: np.ndarray, totals: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -514,7 +588,6 @@ def update_obs_jax(
         )
         return sslm.obs, sslm.zeta
         
-    W = sslm.vocab_len
     T = sslm.num_time_slices
     
     # Convert all numpy arrays to JAX arrays once
@@ -527,45 +600,67 @@ def update_obs_jax(
     jax_fwd_variance = jnp.array(sslm.fwd_variance)
     jax_zeta = jnp.array(sslm.zeta)
     
-    # Initialize cache for low-norm words
-    norm_cutoff_obs_cache = None
-    
-    # Process words one at a time with the JIT-compiled helper function
-    for w_idx in range(W):
-        word_counts_w = jax_sstats[w_idx, :]
+    try:
+        # Process all words using the JIT-compiled helper function
+        jax_obs, jax_mean, jax_fwd_mean = process_vocabulary(
+            jax_sstats,
+            jax_totals,
+            T,
+            jax_obs,
+            jax_mean,
+            jax_fwd_mean,
+            jax_variance,
+            jax_fwd_variance,
+            sslm.chain_variance,
+            sslm.obs_variance,
+            jax_zeta
+        )
         
-        try:
-            # Process this word using the JIT-compiled helper
-            updated_obs_w, updated_mean_w, updated_fwd_mean_w, new_cache = process_single_word(
-                w_idx,
-                jax_obs,
-                jax_mean,
-                jax_fwd_mean,
-                jax_variance,
-                jax_fwd_variance,
-                word_counts_w,
-                T,
-                sslm.chain_variance,
-                sslm.obs_variance,
-                jax_totals,
-                jax_zeta,
-                norm_cutoff_obs_cache
-            )
+        # After processing all words, update the numpy arrays in sslm at once
+        sslm.obs = np.array(jax_obs)
+        sslm.mean = np.array(jax_mean)
+        sslm.fwd_mean = np.array(jax_fwd_mean)
+        
+    except Exception as e:
+        logging.error(f"JAX vocabulary processing failed: {e}")
+        # Fall back to sequential processing
+        norm_cutoff_obs_cache = None
+        
+        # Process words one at a time
+        for w_idx in range(sslm.vocab_len):
+            word_counts_w = jax_sstats[w_idx, :]
             
-            # Update the JAX arrays
-            jax_obs = jax_obs.at[w_idx].set(updated_obs_w)
-            jax_mean = jax_mean.at[w_idx].set(updated_mean_w)
-            jax_fwd_mean = jax_fwd_mean.at[w_idx].set(updated_fwd_mean_w)
-            norm_cutoff_obs_cache = new_cache
-            
-        except Exception as e:
-            logging.error(f"JAX processing failed for word {w_idx}: {e}")
-            # Fall back to original values if processing fails
-    
-    # After processing all words, update the numpy arrays in sslm at once
-    sslm.obs = np.array(jax_obs)
-    sslm.mean = np.array(jax_mean)
-    sslm.fwd_mean = np.array(jax_fwd_mean)
+            try:
+                # Process this word using the JIT-compiled helper
+                updated_obs_w, updated_mean_w, updated_fwd_mean_w, new_cache = process_single_word(
+                    w_idx,
+                    jax_obs,
+                    jax_mean,
+                    jax_fwd_mean,
+                    jax_variance,
+                    jax_fwd_variance,
+                    word_counts_w,
+                    T,
+                    sslm.chain_variance,
+                    sslm.obs_variance,
+                    jax_totals,
+                    jax_zeta,
+                    norm_cutoff_obs_cache
+                )
+                
+                # Update the JAX arrays
+                jax_obs = jax_obs.at[w_idx].set(updated_obs_w)
+                jax_mean = jax_mean.at[w_idx].set(updated_mean_w)
+                jax_fwd_mean = jax_fwd_mean.at[w_idx].set(updated_fwd_mean_w)
+                norm_cutoff_obs_cache = new_cache
+                
+            except Exception as e:
+                logging.error(f"JAX processing failed for word {w_idx}: {e}")
+        
+        # Update numpy arrays
+        sslm.obs = np.array(jax_obs)
+        sslm.mean = np.array(jax_mean)
+        sslm.fwd_mean = np.array(jax_fwd_mean)
     
     # Update zeta
     sslm.zeta = sslm.update_zeta()
