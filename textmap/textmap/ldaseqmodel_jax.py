@@ -558,14 +558,14 @@ def update_obs_jax(
             jax_fwd_mean = jax_fwd_mean.at[w_idx].set(updated_fwd_mean_w)
             norm_cutoff_obs_cache = new_cache
             
-            # Update the numpy arrays in sslm
-            sslm.obs[w_idx, :] = np.array(updated_obs_w)
-            sslm.mean[w_idx, :] = np.array(updated_mean_w)
-            sslm.fwd_mean[w_idx, :] = np.array(updated_fwd_mean_w)
-            
         except Exception as e:
             logging.error(f"JAX processing failed for word {w_idx}: {e}")
             # Fall back to original values if processing fails
+    
+    # After processing all words, update the numpy arrays in sslm at once
+    sslm.obs = np.array(jax_obs)
+    sslm.mean = np.array(jax_mean)
+    sslm.fwd_mean = np.array(jax_fwd_mean)
     
     # Update zeta
     sslm.zeta = sslm.update_zeta()
