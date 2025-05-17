@@ -206,3 +206,90 @@ def test_get_topics(model_params, sample_data):
         logger.error(f"Exception in test_get_topics: {e}")
         logger.error(traceback.format_exc())
         raise
+
+
+def test_jax_optimization_error(sample_data):
+    """Test specifically to debug JAX optimization error."""
+    import logging
+    import traceback
+    import inspect
+    
+    # Set up logging
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger("test_jax_optimization")
+    
+    try:
+        # Import modules to inspect
+        import scipy.optimize
+        try:
+            import jax
+            import jax.scipy.optimize
+            jax_available = True
+        except ImportError:
+            jax_available = False
+            logger.warning("JAX not available")
+        
+        # Log scipy.optimize.minimize parameters
+        logger.info("scipy.optimize.minimize signature:")
+        logger.info(inspect.signature(scipy.optimize.minimize))
+        
+        if jax_available:
+            # Log jax.scipy.optimize.minimize parameters if available
+            logger.info("jax.scipy.optimize.minimize signature:")
+            logger.info(inspect.signature(jax.scipy.optimize.minimize))
+        
+        # Try to import and inspect textmap.ldaseqmodel_jax
+        try:
+            from textmap import ldaseqmodel_jax
+            
+            # Check if _optimize_obs_word exists and inspect it
+            if hasattr(ldaseqmodel_jax, '_optimize_obs_word'):
+                logger.info("Found _optimize_obs_word in ldaseqmodel_jax")
+                logger.info(inspect.getsource(ldaseqmodel_jax._optimize_obs_word))
+                
+                # Check if it's using jax.scipy.optimize.minimize
+                source = inspect.getsource(ldaseqmodel_jax._optimize_obs_word)
+                if "jax.scipy.optimize.minimize" in source:
+                    logger.info("_optimize_obs_word is using jax.scipy.optimize.minimize")
+                elif "scipy.optimize.minimize" in source:
+                    logger.info("_optimize_obs_word is using scipy.optimize.minimize")
+            
+            # Try to run a minimal example with JAX optimization
+            logger.info("Attempting to run model with JAX optimization")
+            model_params = {
+                "num_topics": 2,
+                "chain_variance": 0.005,
+                "passes": 2,
+                "em_min_iter": 1,
+                "em_max_iter": 2,
+                "lda_inference_max_iter": 2,
+                "use_jax": True  # Enable JAX
+            }
+            
+            dtm = DynamicTopicModel(**model_params)
+            
+            try:
+                dtm.fit(sample_data)
+                logger.info("JAX optimization succeeded!")
+            except Exception as fit_error:
+                logger.error(f"JAX optimization failed: {fit_error}")
+                logger.error(traceback.format_exc())
+                
+                # Try to identify the specific error
+                if "minimize() got an unexpected keyword argument 'jac'" in str(fit_error):
+                    logger.error("The error is related to the 'jac' parameter in minimize()")
+                    logger.error("This suggests a version mismatch or API incompatibility between JAX and scipy")
+                    
+                    # Check versions
+                    import scipy
+                    logger.info(f"scipy version: {scipy.__version__}")
+                    
+                    if jax_available:
+                        logger.info(f"jax version: {jax.__version__}")
+        
+        except ImportError:
+            logger.warning("Could not import textmap.ldaseqmodel_jax")
+        
+    except Exception as e:
+        logger.error(f"Exception in test_jax_optimization_error: {e}")
+        logger.error(traceback.format_exc())
