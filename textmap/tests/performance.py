@@ -1,13 +1,11 @@
 import cProfile
 import pstats
 import io
+import os
 import pandas as pd
-import pytest
-import traceback
-import sys
-import inspect
-from contextlib import contextmanager
+import numpy as np
 import logging
+from contextlib import contextmanager
 from textmap.dynamic_topic_models import DynamicTopicModel
 from gensim.test.utils import common_texts
 
@@ -40,6 +38,30 @@ def profile_operation(operation_name):
     logger.info(f"Full profile saved to {filename}")
 
 
+def profile_with_jax(func, *args, **kwargs):
+    """Profile a function using JAX's profiler."""
+    try:
+        import jax
+        from jax import profiler
+        
+        # Create a directory for the trace if it doesn't exist
+        trace_dir = "/tmp/jax-trace"
+        os.makedirs(trace_dir, exist_ok=True)
+        
+        logger.info(f"Starting JAX profiler trace in {trace_dir}")
+        with profiler.trace(trace_dir, create_perfetto_link=True):
+            result = func(*args, **kwargs)
+            # Make sure computation is complete
+            if hasattr(result, "block_until_ready"):
+                result.block_until_ready()
+        
+        logger.info(f"JAX profiler trace completed. View with perfetto at {trace_dir}")
+        return result
+    except ImportError:
+        logger.warning("JAX not available, falling back to regular profiling")
+        return func(*args, **kwargs)
+
+
 def create_sample_data(size_multiplier=1):
     """Create sample data for profiling, with adjustable size."""
     # Prepare sample data for three time slices
@@ -63,107 +85,51 @@ def get_model_params():
         "em_min_iter": 3,
         "em_max_iter": 10,
         "lda_inference_max_iter": 10,
+        "use_jax": True,  # Enable JAX for profiling
     }
-
-
-def debug_jax_error():
-    """Run a specific test to debug the JAX error."""
-    logger.info("Starting JAX error debugging")
-
-    # Create a small sample for debugging
-    sample_data = create_sample_data(size_multiplier=1)
-
-    # Try with JAX enabled
-    model_params = get_model_params()
-
-    logger.info("Creating model with JAX enabled")
-    dtm = DynamicTopicModel(**model_params)
-
-    try:
-        logger.info("Attempting to fit model with JAX")
-        dtm.fit(sample_data)
-        logger.info("JAX fitting succeeded!")
-        return True
-    except Exception as e:
-        logger.error(f"JAX error: {e}")
-        logger.error(traceback.format_exc())
-
-        # Try to find the minimize function that's causing the error
-        logger.info("Inspecting JAX optimization code...")
-
-        try:
-            # Import the modules that might contain the minimize function
-            import scipy.optimize
-            import jax.scipy.optimize
-
-            # Check scipy.optimize.minimize signature
-            logger.info("scipy.optimize.minimize signature:")
-            logger.info(inspect.signature(scipy.optimize.minimize))
-            logger.info("scipy.optimize.minimize parameters:")
-            for name, param in inspect.signature(
-                scipy.optimize.minimize
-            ).parameters.items():
-                logger.info(f"  {name}: {param.default}")
-
-            # Try to check jax.scipy.optimize.minimize if available
-            try:
-                logger.info("jax.scipy.optimize.minimize signature:")
-                logger.info(inspect.signature(jax.scipy.optimize.minimize))
-                logger.info("jax.scipy.optimize.minimize parameters:")
-                for name, param in inspect.signature(
-                    jax.scipy.optimize.minimize
-                ).parameters.items():
-                    logger.info(f"  {name}: {param.default}")
-            except (ImportError, AttributeError) as e:
-                logger.error(f"Could not inspect jax.scipy.optimize.minimize: {e}")
-
-            # Check if textmap.ldaseqmodel_jax is being imported
-            try:
-                import textmap.ldaseqmodel_jax
-
-                logger.info("textmap.ldaseqmodel_jax is available")
-
-                # Check the _optimize_obs_word function
-                if hasattr(textmap.ldaseqmodel_jax, "_optimize_obs_word"):
-                    logger.info("Found _optimize_obs_word function")
-                    logger.info(
-                        inspect.getsource(textmap.ldaseqmodel_jax._optimize_obs_word)
-                    )
-            except (ImportError, AttributeError) as e:
-                logger.error(f"Could not inspect textmap.ldaseqmodel_jax: {e}")
-
-        except Exception as inspect_error:
-            logger.error(f"Error during inspection: {inspect_error}")
-            logger.error(traceback.format_exc())
-
-        return False
 
 
 def profile_model_fitting():
     """Profile the model fitting process."""
     logger.info("Starting model fitting profiling")
 
-    # First try to debug the JAX error
-    debug_jax_error()
-
     # Create sample data - use a multiplier to increase dataset size if needed
     sample_data = create_sample_data(size_multiplier=2)
     logger.info(f"Created sample data with {len(sample_data)} documents")
 
-    # Initialize model with JAX disabled
+    # Initialize model
     model_params = get_model_params()
     logger.info(f"Using model parameters: {model_params}")
-
+    
     dtm = DynamicTopicModel(**model_params)
-
-    # Profile the fit operation
+    
+    # Profile the fit operation with both cProfile and JAX profiler
     try:
+        # First with cProfile
         with profile_operation("model_fitting"):
             dtm.fit(sample_data)
+        
+        # Then try with JAX profiler if available
+        try:
+            import jax
+            logger.info("JAX is available, attempting to profile with JAX profiler")
+            
+            # Create a fresh model for JAX profiling
+            jax_dtm = DynamicTopicModel(**model_params)
+            
+            # Define a function to profile
+            def fit_model(model, data):
+                return model.fit(data)
+            
+            # Profile with JAX
+            profile_with_jax(fit_model, jax_dtm, sample_data)
+            
+        except ImportError:
+            logger.info("JAX not available, skipping JAX profiling")
+        
         return dtm, sample_data
     except Exception as e:
         logger.error(f"Error during model fitting: {e}")
-        logger.error(traceback.format_exc())
         # Return None to indicate failure
         return None, sample_data
 
@@ -191,9 +157,28 @@ def profile_topic_extraction(dtm, sample_data):
         # Profile document transformation
         with profile_operation("transform_documents"):
             topic_distributions = dtm.transform(sample_data)
+            
+        # Try JAX profiling for get_topics
+        try:
+            import jax
+            logger.info("Profiling get_topics with JAX profiler")
+            
+            # Define functions to profile
+            def get_all_topics(model):
+                return model.get_topics(time_periods=None, top_terms=10)
+                
+            def transform_docs(model, data):
+                return model.transform(data)
+            
+            # Profile with JAX
+            profile_with_jax(get_all_topics, dtm)
+            profile_with_jax(transform_docs, dtm, sample_data)
+            
+        except ImportError:
+            logger.info("JAX not available, skipping JAX profiling")
+            
     except Exception as e:
         logger.error(f"Error during topic extraction: {e}")
-        logger.error(traceback.format_exc())
 
 
 def profile_preprocessing(dtm, sample_data):
@@ -201,7 +186,6 @@ def profile_preprocessing(dtm, sample_data):
     logger.info("Starting preprocessing profiling")
 
     # Create a new model instance for preprocessing tests
-    # This ensures we can profile preprocessing even if the main model fitting failed
     model_params = get_model_params()
     fresh_dtm = DynamicTopicModel(**model_params)
 
@@ -219,7 +203,33 @@ def profile_preprocessing(dtm, sample_data):
             time_slices = fresh_dtm._calculate_time_slices(sample_data)
     except Exception as e:
         logger.error(f"Error during preprocessing profiling: {e}")
-        logger.error(traceback.format_exc())
+
+
+def profile_jax_operations():
+    """Profile JAX operations directly."""
+    try:
+        import jax
+        import jax.numpy as jnp
+        
+        logger.info("Profiling JAX matrix operations")
+        
+        def matrix_operations():
+            # Generate random data
+            key = jax.random.key(0)
+            x = jax.random.normal(key, (1000, 1000))
+            
+            # Perform matrix operations
+            y = x @ x.T
+            z = jnp.exp(y / 10.0)
+            result = jnp.sum(z)
+            
+            return result
+        
+        # Profile with JAX
+        profile_with_jax(matrix_operations)
+        
+    except ImportError:
+        logger.info("JAX not available, skipping JAX operations profiling")
 
 
 def main():
@@ -227,6 +237,9 @@ def main():
     logger.info("Starting performance profiling")
 
     try:
+        # Profile JAX operations directly
+        profile_jax_operations()
+        
         # Profile model fitting
         dtm, sample_data = profile_model_fitting()
 
@@ -239,7 +252,6 @@ def main():
         logger.info("Performance profiling completed")
     except Exception as e:
         logger.error(f"Unhandled exception in performance profiling: {e}")
-        logger.error(traceback.format_exc())
         sys.exit(1)
 
 
