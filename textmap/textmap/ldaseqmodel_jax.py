@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 from functools import partial
 from typing import Tuple, Optional
-from scipy import optimize
+import jax.scipy.optimize
 
 logger = logging.getLogger(__name__)
 
@@ -213,10 +213,10 @@ def _compute_objective_terms(
     
     return term1 + zeta_term + chain_term
 
+@jax.jit
 def jax_f_obs(
     x_obs_w, word_counts_w, totals_time, variance_word_fixed, fwd_variance_word_fixed,
-    chain_variance, obs_variance_scalar, num_time_slices, zeta_topic_fixed,
-    mean_word_buffer=None, fwd_mean_word_buffer=None
+    chain_variance, obs_variance_scalar, num_time_slices, zeta_topic_fixed
 ):
     """JAX implementation of f_obs with vectorized operations.
     
@@ -289,10 +289,10 @@ def _compute_gradient_part2(
         0.0
     )
 
+@jax.jit
 def jax_df_obs(
     x_obs_w, word_counts_w, totals_time, variance_word_fixed, fwd_variance_word_fixed,
-    chain_variance, obs_variance_scalar, num_time_slices, zeta_topic_fixed,
-    mean_word_buffer=None, fwd_mean_word_buffer=None, mean_deriv_mtx_w=None, grad_output_buffer=None
+    chain_variance, obs_variance_scalar, num_time_slices, zeta_topic_fixed
 ):
     """JAX implementation of df_obs with vectorized operations.
     
@@ -348,6 +348,39 @@ def jax_df_obs(
     
     return -grad  # Negative for minimization
 
+# JIT-compiled optimization function
+@jax.jit
+def _optimize_obs_word(
+    initial_obs_w, word_counts, totals, variance, fwd_variance, 
+    chain_variance, obs_variance, num_time_slices, zeta
+):
+    """JIT-compiled function to optimize obs values for a single word."""
+    
+    # Define the objective function and its gradient for JAX optimizer
+    def objective_and_grad(x):
+        # Compute objective value
+        value = jax_f_obs(
+            x, word_counts, totals, variance, fwd_variance,
+            chain_variance, obs_variance, num_time_slices, zeta
+        )
+        # Compute gradient
+        grad = jax_df_obs(
+            x, word_counts, totals, variance, fwd_variance,
+            chain_variance, obs_variance, num_time_slices, zeta
+        )
+        return value, grad
+    
+    # Use JAX's BFGS optimizer (similar to CG but often more efficient)
+    result = jax.scipy.optimize.minimize(
+        fun=lambda x: objective_and_grad(x)[0],
+        x0=initial_obs_w,
+        jac=lambda x: objective_and_grad(x)[1],
+        method='BFGS',
+        options={'gtol': 1e-3}
+    )
+    
+    return result.x
+
 def update_obs_jax(
     sslm, sstats: np.ndarray, totals: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -380,13 +413,15 @@ def update_obs_jax(
     W = sslm.vocab_len
     T = sslm.num_time_slices
     
-    # Constants for fmin_cg and logic from original code
+    # Constants for optimization
     OBS_NORM_CUTOFF = 2.0
-    TOL_GTOL = 1e-3  # gtol for fmin_cg (gradient tolerance)
+    
+    # Convert totals to JAX array once (used for all words)
+    jax_totals = jnp.array(totals)
     
     norm_cutoff_obs_cache: Optional[np.ndarray] = None
     
-    # Process words in parallel batches if possible
+    # Process words one at a time (future improvement: batch processing)
     for w_idx in range(W):
         word_counts_w = sstats[w_idx, :]
         counts_norm = np.linalg.norm(word_counts_w)
@@ -403,62 +438,54 @@ def update_obs_jax(
             if counts_norm < OBS_NORM_CUTOFF:
                 word_counts_w_for_opt = np.zeros_like(word_counts_w)
                 
-            # Fixed data for the current word
-            variance_word_fixed = np.ascontiguousarray(sslm.variance[w_idx, :])
-            fwd_variance_word_fixed = np.ascontiguousarray(sslm.fwd_variance[w_idx, :])
-            initial_obs_w = sslm.obs[w_idx, :]
-            
-            # Convert to JAX arrays for optimization
+            # Fixed data for the current word - convert to JAX arrays once
             jax_word_counts = jnp.array(word_counts_w_for_opt)
-            jax_totals = jnp.array(totals)
-            jax_variance = jnp.array(variance_word_fixed)
-            jax_fwd_variance = jnp.array(fwd_variance_word_fixed)
+            jax_variance = jnp.array(sslm.variance[w_idx, :])
+            jax_fwd_variance = jnp.array(sslm.fwd_variance[w_idx, :])
+            jax_initial_obs = jnp.array(sslm.obs[w_idx, :])
             jax_zeta = jnp.array(sslm.zeta)
             
-            # Create wrapper functions for scipy.optimize.fmin_cg
-            def f_obs_wrapper(x):
-                return jax_f_obs(
-                    jnp.array(x), jax_word_counts, jax_totals,
-                    jax_variance, jax_fwd_variance,
-                    sslm.chain_variance, sslm.obs_variance,
-                    T, jax_zeta
+            try:
+                # Use the JIT-compiled optimization function
+                optimized_result = _optimize_obs_word(
+                    jax_initial_obs, 
+                    jax_word_counts, 
+                    jax_totals,
+                    jax_variance, 
+                    jax_fwd_variance,
+                    sslm.chain_variance, 
+                    sslm.obs_variance,
+                    T, 
+                    jax_zeta
                 )
                 
-            def df_obs_wrapper(x):
-                return np.array(jax_df_obs(
-                    jnp.array(x), jax_word_counts, jax_totals,
-                    jax_variance, jax_fwd_variance,
-                    sslm.chain_variance, sslm.obs_variance,
-                    T, jax_zeta
-                ))
-            
-            try:
-                optimized_obs_w_result = optimize.fmin_cg(
-                    f=f_obs_wrapper,
-                    fprime=df_obs_wrapper,
-                    x0=initial_obs_w,
-                    gtol=TOL_GTOL,
-                    disp=0,
-                )
-                current_obs_w_optimized = optimized_obs_w_result
+                # Convert result back to numpy
+                current_obs_w_optimized = np.array(optimized_result)
+                
             except Exception as e:
                 logging.error(f"JAX optimization failed for word {w_idx}: {e}")
-                current_obs_w_optimized = initial_obs_w
+                current_obs_w_optimized = sslm.obs[w_idx, :]
                 
             if counts_norm < OBS_NORM_CUTOFF:
                 norm_cutoff_obs_cache = np.copy(current_obs_w_optimized)
                 
         sslm.obs[w_idx, :] = current_obs_w_optimized
-        
+    
     # Update mean and fwd_mean for all words
     for w_idx in range(W):
+        # Convert to JAX arrays
+        jax_obs = jnp.array(sslm.obs[w_idx, :])
+        jax_fwd_variance = jnp.array(sslm.fwd_variance[w_idx, :])
+        
+        # Compute means
         mean, fwd_mean = jax_compute_post_mean_scan_unjitted(
-            np.ascontiguousarray(sslm.obs[w_idx, :]),
-            np.ascontiguousarray(sslm.fwd_variance[w_idx, :]),
+            jax_obs,
+            jax_fwd_variance,
             sslm.chain_variance,
             sslm.obs_variance,
             T
         )
+        
         # Copy results back to numpy arrays
         sslm.mean[w_idx, :] = np.array(mean)
         sslm.fwd_mean[w_idx, :] = np.array(fwd_mean)
