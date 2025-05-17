@@ -1,0 +1,54 @@
+#+title: Dynamic Topic Models
+
+#+BEGIN_SRC python :session dynamic_topic_models.org  :exports both
+import pandas as pd
+roam_df = pd.read_csv("data/roam_nodes_df.csv")
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session dynamic_topic_models.org  :exports both
+roam_df.shape
+#+END_SRC
+
+#+RESULTS:
+| 7110 | 10 |
+
+#+BEGIN_SRC python :session dynamic_topic_models.org  :exports both :async
+from bertopic import BERTopic
+
+topic_model = BERTopic(verbose=True)
+topics, probs = topic_model.fit_transform(roam_df["text"].to_list())
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session dynamic_topic_models.org  :exports both :async
+topics_over_time = topic_model.topics_over_time(roam_df["text"].to_list(), roam_df["creation_date"], nr_bins=20)
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session dynamic_topic_models.org  :exports both
+topics_over_time.columns
+#+END_SRC
+
+#+RESULTS:
+: Index(['Topic', 'Words', 'Frequency', 'Timestamp'], dtype='object')
+
+#+BEGIN_SRC python :session dynamic_topic_models.org  :exports both
+plotly_topics_over_time = topic_model.visualize_topics_over_time(topics_over_time, top_n_topics=20)
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session dynamic_topic_models.org  :exports both
+plotly_topics_over_time.write_html("/tmp/plotly_topics_over_time.html")
+#+END_SRC
+
+#+RESULTS:
+: None
