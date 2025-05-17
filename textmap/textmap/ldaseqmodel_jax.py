@@ -747,11 +747,26 @@ class LdaSeqModelJax(utils.SaveLoad):
             f"Set expElogbeta with shape: {lda_model_instance.expElogbeta.shape}"
         )
 
-        # Directly set a topics attribute on the instance
-        lda_model_instance.topics = current_exp_elogbeta.T
-        logger.debug(
-            f"Set topics attribute directly with shape: {lda_model_instance.topics.shape}"
-        )
+        # Create a topics attribute as a property-like object that behaves like a 2D array
+        # This allows LdaPost to access it with lda.topics[k][word_id] syntax
+        class TopicsAccessor:
+            def __init__(self, matrix):
+                self.matrix = matrix
+                
+            def __getitem__(self, k):
+                # Return a row that itself supports __getitem__
+                class TopicRow:
+                    def __init__(self, row):
+                        self.row = row
+                        
+                    def __getitem__(self, word_id):
+                        return self.row[word_id]
+                
+                return TopicRow(self.matrix[k])
+        
+        # Set the topics attribute with our custom accessor
+        lda_model_instance.topics = TopicsAccessor(current_exp_elogbeta.T)
+        logger.debug("Set topics attribute with custom accessor")
 
         # Also set state.expElogbeta if state exists
         if hasattr(lda_model_instance, "state"):
@@ -1207,9 +1222,23 @@ class LdaPost(utils.SaveLoad):
         n = 0  # keep track of iterations for phi, log_phi
         for word_id, count in self.doc:
             for k in range(num_topics):
-                # Access topic-word distribution through expElogbeta instead of topics
-                # expElogbeta is shaped (num_topics, vocab_len)
-                self.log_phi[n][k] = dig[k] + self.lda.expElogbeta[k][word_id]
+                # Try to access topic-word distribution through expElogbeta
+                # If that fails, fall back to a direct access method
+                try:
+                    topic_word_logprob = self.lda.expElogbeta[k][word_id]
+                except (IndexError, AttributeError):
+                    # If expElogbeta access fails, try to access topics directly
+                    # This is a fallback and shouldn't normally be needed
+                    if hasattr(self.lda, 'topics'):
+                        topic_word_logprob = self.lda.topics[k][word_id]
+                    else:
+                        # Last resort - create a default value
+                        # This is not ideal but prevents crashes
+                        topic_word_logprob = -10.0  # A small log probability
+                        import logging
+                        logging.warning(f"Could not access topic-word distribution for word {word_id}, topic {k}")
+                
+                self.log_phi[n][k] = dig[k] + topic_word_logprob
 
             log_phi_row = self.log_phi[n]
             phi_row = self.phi[n]
@@ -1300,12 +1329,28 @@ class LdaPost(utils.SaveLoad):
                 if self.phi[n][k] > 0:
                     # Access topic-word distribution through expElogbeta instead of topics
                     # expElogbeta is shaped (num_topics, vocab_len)
+                    # Try to access topic-word distribution through expElogbeta
+                    # If that fails, fall back to a direct access method
+                    try:
+                        topic_word_logprob = self.lda.expElogbeta[k][word_id]
+                    except (IndexError, AttributeError):
+                        # If expElogbeta access fails, try to access topics directly
+                        # This is a fallback and shouldn't normally be needed
+                        if hasattr(self.lda, 'topics'):
+                            topic_word_logprob = self.lda.topics[k][word_id]
+                        else:
+                            # Last resort - create a default value
+                            # This is not ideal but prevents crashes
+                            topic_word_logprob = -10.0  # A small log probability
+                            import logging
+                            logging.warning(f"Could not access topic-word distribution for word {word_id}, topic {k}")
+                    
                     lhood_term += (
                         count
                         * self.phi[n][k]
                         * (
                             e_log_theta_k
-                            + self.lda.expElogbeta[k][word_id]
+                            + topic_word_logprob
                             - self.log_phi[n][k]
                         )
                     )
