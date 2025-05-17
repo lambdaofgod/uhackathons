@@ -381,6 +381,110 @@ def _optimize_obs_word(
     
     return result.x
 
+@partial(jax.jit, static_argnums=(7,))
+def process_single_word(
+    w_idx, obs, mean, fwd_mean, variance, fwd_variance, 
+    word_counts, num_time_slices, chain_variance, obs_variance, 
+    totals, zeta, norm_cutoff_obs_cache=None
+):
+    """JIT-compiled function to process a single word in the vocabulary.
+    
+    This function handles the optimization of obs values for a single word
+    and updates the corresponding mean and fwd_mean values.
+    
+    Parameters
+    ----------
+    w_idx : int
+        Index of the word being processed
+    obs : jnp.ndarray
+        Current obs values for all words
+    mean : jnp.ndarray
+        Current mean values for all words
+    fwd_mean : jnp.ndarray
+        Current forward mean values for all words
+    variance : jnp.ndarray
+        Current variance values for all words
+    fwd_variance : jnp.ndarray
+        Current forward variance values for all words
+    word_counts : jnp.ndarray
+        Word counts for the current word
+    num_time_slices : int
+        Number of time slices
+    chain_variance : float
+        Chain variance parameter
+    obs_variance : float
+        Observation variance parameter
+    totals : jnp.ndarray
+        Total counts for each time slice
+    zeta : jnp.ndarray
+        Current zeta values
+    norm_cutoff_obs_cache : Optional[jnp.ndarray]
+        Cached obs values for low-norm words
+        
+    Returns
+    -------
+    Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]
+        Updated obs, mean, fwd_mean, and norm_cutoff_obs_cache
+    """
+    OBS_NORM_CUTOFF = 2.0
+    
+    # Get current values for this word
+    current_obs_w = obs[w_idx]
+    current_variance_w = variance[w_idx]
+    current_fwd_variance_w = fwd_variance[w_idx]
+    
+    # Calculate norm of word counts
+    counts_norm = jnp.linalg.norm(word_counts)
+    
+    # Decide whether to optimize or use cached values
+    use_cache = (counts_norm < OBS_NORM_CUTOFF) & (norm_cutoff_obs_cache is not None)
+    
+    # For low-norm words, zero out the counts for optimization
+    word_counts_for_opt = jnp.where(
+        counts_norm < OBS_NORM_CUTOFF,
+        jnp.zeros_like(word_counts),
+        word_counts
+    )
+    
+    # Optimize the obs values
+    optimized_obs = _optimize_obs_word(
+        current_obs_w, 
+        word_counts_for_opt, 
+        totals,
+        current_variance_w, 
+        current_fwd_variance_w,
+        chain_variance, 
+        obs_variance,
+        num_time_slices, 
+        zeta
+    )
+    
+    # Use cached values if appropriate
+    final_obs = jnp.where(
+        use_cache,
+        norm_cutoff_obs_cache,
+        optimized_obs
+    )
+    
+    # Update cache if this is a low-norm word
+    new_cache = jnp.where(
+        counts_norm < OBS_NORM_CUTOFF,
+        optimized_obs,
+        norm_cutoff_obs_cache if norm_cutoff_obs_cache is not None else optimized_obs
+    )
+    
+    # Compute updated mean and fwd_mean
+    new_mean, new_fwd_mean = jax_compute_post_mean_scan_unjitted(
+        final_obs,
+        current_fwd_variance_w,
+        chain_variance,
+        obs_variance,
+        num_time_slices
+    )
+    
+    # Return updated values
+    return final_obs, new_mean, new_fwd_mean, new_cache
+
 def update_obs_jax(
     sslm, sstats: np.ndarray, totals: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -413,83 +517,56 @@ def update_obs_jax(
     W = sslm.vocab_len
     T = sslm.num_time_slices
     
-    # Constants for optimization
-    OBS_NORM_CUTOFF = 2.0
-    
-    # Convert totals to JAX array once (used for all words)
+    # Convert all numpy arrays to JAX arrays once
     jax_totals = jnp.array(totals)
+    jax_sstats = jnp.array(sstats)
+    jax_obs = jnp.array(sslm.obs)
+    jax_mean = jnp.array(sslm.mean)
+    jax_fwd_mean = jnp.array(sslm.fwd_mean)
+    jax_variance = jnp.array(sslm.variance)
+    jax_fwd_variance = jnp.array(sslm.fwd_variance)
+    jax_zeta = jnp.array(sslm.zeta)
     
-    norm_cutoff_obs_cache: Optional[np.ndarray] = None
+    # Initialize cache for low-norm words
+    norm_cutoff_obs_cache = None
     
-    # Process words one at a time (future improvement: batch processing)
+    # Process words one at a time with the JIT-compiled helper function
     for w_idx in range(W):
-        word_counts_w = sstats[w_idx, :]
-        counts_norm = np.linalg.norm(word_counts_w)
+        word_counts_w = jax_sstats[w_idx, :]
         
-        current_obs_w_optimized: np.ndarray
-        run_optimization = True
-        
-        if counts_norm < OBS_NORM_CUTOFF and norm_cutoff_obs_cache is not None:
-            current_obs_w_optimized = np.copy(norm_cutoff_obs_cache)
-            run_optimization = False
+        try:
+            # Process this word using the JIT-compiled helper
+            updated_obs_w, updated_mean_w, updated_fwd_mean_w, new_cache = process_single_word(
+                w_idx,
+                jax_obs,
+                jax_mean,
+                jax_fwd_mean,
+                jax_variance,
+                jax_fwd_variance,
+                word_counts_w,
+                T,
+                sslm.chain_variance,
+                sslm.obs_variance,
+                jax_totals,
+                jax_zeta,
+                norm_cutoff_obs_cache
+            )
             
-        if run_optimization:
-            word_counts_w_for_opt = word_counts_w
-            if counts_norm < OBS_NORM_CUTOFF:
-                word_counts_w_for_opt = np.zeros_like(word_counts_w)
-                
-            # Fixed data for the current word - convert to JAX arrays once
-            jax_word_counts = jnp.array(word_counts_w_for_opt)
-            jax_variance = jnp.array(sslm.variance[w_idx, :])
-            jax_fwd_variance = jnp.array(sslm.fwd_variance[w_idx, :])
-            jax_initial_obs = jnp.array(sslm.obs[w_idx, :])
-            jax_zeta = jnp.array(sslm.zeta)
+            # Update the JAX arrays
+            jax_obs = jax_obs.at[w_idx].set(updated_obs_w)
+            jax_mean = jax_mean.at[w_idx].set(updated_mean_w)
+            jax_fwd_mean = jax_fwd_mean.at[w_idx].set(updated_fwd_mean_w)
+            norm_cutoff_obs_cache = new_cache
             
-            try:
-                # Use the JIT-compiled optimization function
-                optimized_result = _optimize_obs_word(
-                    jax_initial_obs, 
-                    jax_word_counts, 
-                    jax_totals,
-                    jax_variance, 
-                    jax_fwd_variance,
-                    sslm.chain_variance, 
-                    sslm.obs_variance,
-                    T, 
-                    jax_zeta
-                )
-                
-                # Convert result back to numpy
-                current_obs_w_optimized = np.array(optimized_result)
-                
-            except Exception as e:
-                logging.error(f"JAX optimization failed for word {w_idx}: {e}")
-                current_obs_w_optimized = sslm.obs[w_idx, :]
-                
-            if counts_norm < OBS_NORM_CUTOFF:
-                norm_cutoff_obs_cache = np.copy(current_obs_w_optimized)
-                
-        sslm.obs[w_idx, :] = current_obs_w_optimized
+            # Update the numpy arrays in sslm
+            sslm.obs[w_idx, :] = np.array(updated_obs_w)
+            sslm.mean[w_idx, :] = np.array(updated_mean_w)
+            sslm.fwd_mean[w_idx, :] = np.array(updated_fwd_mean_w)
+            
+        except Exception as e:
+            logging.error(f"JAX processing failed for word {w_idx}: {e}")
+            # Fall back to original values if processing fails
     
-    # Update mean and fwd_mean for all words
-    for w_idx in range(W):
-        # Convert to JAX arrays
-        jax_obs = jnp.array(sslm.obs[w_idx, :])
-        jax_fwd_variance = jnp.array(sslm.fwd_variance[w_idx, :])
-        
-        # Compute means
-        mean, fwd_mean = jax_compute_post_mean_scan_unjitted(
-            jax_obs,
-            jax_fwd_variance,
-            sslm.chain_variance,
-            sslm.obs_variance,
-            T
-        )
-        
-        # Copy results back to numpy arrays
-        sslm.mean[w_idx, :] = np.array(mean)
-        sslm.fwd_mean[w_idx, :] = np.array(fwd_mean)
-        
     # Update zeta
     sslm.zeta = sslm.update_zeta()
     
