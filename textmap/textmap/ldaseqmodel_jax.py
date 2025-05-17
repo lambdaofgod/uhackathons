@@ -691,8 +691,9 @@ class LdaSeqModelJax(utils.SaveLoad):
                 self.topic_chains_jax[k_topic].e_log_prob[:, time_slice_idx]
             )
 
-        # This is a workaround if LdaPost directly accesses lda.topics as a 2D array
-        lda_model_instance.topics = current_exp_elogbeta  # type: ignore
+        # Instead of setting topics directly (which doesn't exist in LdaModel),
+        # set the expElogbeta attribute which is what LdaPost actually uses
+        lda_model_instance.expElogbeta = current_exp_elogbeta.T  # Transpose to match LdaModel's expected shape
 
         lda_model_instance.alpha = np.copy(self.alphas_np)  # Ensure alpha is also set
         return lda_model_instance
