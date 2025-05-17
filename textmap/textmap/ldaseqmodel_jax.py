@@ -692,8 +692,11 @@ class LdaSeqModelJax(utils.SaveLoad):
             )
 
         # Instead of setting topics directly (which doesn't exist in LdaModel),
-        # set the expElogbeta attribute which is what LdaPost actually uses
+        # we need to set both expElogbeta and create a topics attribute
         lda_model_instance.expElogbeta = current_exp_elogbeta.T  # Transpose to match LdaModel's expected shape
+        
+        # Add a topics attribute that LdaPost can access
+        lda_model_instance.topics = current_exp_elogbeta.T
 
         lda_model_instance.alpha = np.copy(self.alphas_np)  # Ensure alpha is also set
         return lda_model_instance
