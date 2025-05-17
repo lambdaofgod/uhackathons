@@ -650,59 +650,45 @@ class LdaSeqModelJax(utils.SaveLoad):
         self, lda_model_instance: ldamodel.LdaModel, time_slice_idx: int
     ) -> ldamodel.LdaModel:
         """Updates the LDA model's topics with e_log_prob from JAX chains for a specific time slice."""
+        import logging
+        logger = logging.getLogger("make_lda_seq_slice_jax")
+        logger.debug(f"Updating LDA model for time slice {time_slice_idx}")
+        logger.debug(f"LDA model instance type: {type(lda_model_instance)}")
+        logger.debug(f"LDA model instance dir: {dir(lda_model_instance)}")
+        logger.debug(f"LDA model has topics attr: {hasattr(lda_model_instance, 'topics')}")
+        logger.debug(f"LDA model has expElogbeta attr: {hasattr(lda_model_instance, 'expElogbeta')}")
+        
+        # Create the expElogbeta matrix
+        current_exp_elogbeta = np.zeros(
+            (self.vocab_len, self.num_topics), dtype=np.float64
+        )
         for k_topic in range(self.num_topics):
             # Convert JAX array to NumPy for Gensim LdaModel
             e_log_prob_k_t = np.array(
                 self.topic_chains_jax[k_topic].e_log_prob[:, time_slice_idx]
             )
-            lda_model_instance.expElogbeta[:, k_topic] = (
-                e_log_prob_k_t  # Store log probs
-            )
-            # Gensim's LdaModel often works with expElogbeta, but if it needs topics directly:
-            # lda_model_instance.state.sstats[k_topic, :] = np.exp(e_log_prob_k_t) # Or similar update
-
-        # If LdaModel uses state.get_lambda() or similar, ensure it reflects these values.
-        # For simplicity, we assume direct update of expElogbeta is sufficient for inference.
-        # If LdaModel.inference uses self.state.sstats or self.state.get_lambda(),
-        # those might need to be updated or a custom inference path used.
-        # A common way is to set `lda_model_instance.state.expElogbeta`.
-        # The original `LdaModel.topics` was a property that returned expElogbeta.
-        # Let's assume `lda_model_instance.expElogbeta` is the correct attribute.
-        # If not, this part needs adjustment based on how Gensim's LdaModel uses topic-word distributions.
-        # A safer bet might be to update `lda_model_instance.state.sstats` if that's what inference uses,
-        # or ensure `lda_model_instance.expElogbeta` is correctly used by `LdaPost`.
-        # The original `make_lda_seq_slice` updated `lda.topics` which was a property.
-        # Let's try to update `lda_model_instance.expElogbeta` as it's often used directly.
-        # If `LdaPost` uses `lda.topics[word_id][k]`, this needs to point to the correct log-probabilities.
-        # A simple hack for LdaPost if it reads `lda.topics`:
-        class TempTopics:
-            def __init__(self, exp_e_log_beta_matrix):
-                self.exp_e_log_beta_matrix = exp_e_log_beta_matrix
-
-            def __getitem__(self, item):  # word_id, k_topic
-                word_id, k_topic_idx = item
-                return self.exp_e_log_beta_matrix[word_id, k_topic_idx]
-
-        current_exp_elogbeta = np.zeros(
-            (self.vocab_len, self.num_topics), dtype=np.float64
-        )
-        for k_topic in range(self.num_topics):
-            current_exp_elogbeta[:, k_topic] = np.array(
-                self.topic_chains_jax[k_topic].e_log_prob[:, time_slice_idx]
-            )
-
+            current_exp_elogbeta[:, k_topic] = e_log_prob_k_t
+        
         # Set expElogbeta which is what LdaModel actually uses
         lda_model_instance.expElogbeta = current_exp_elogbeta.T  # Transpose to match LdaModel's expected shape
+        logger.debug(f"Set expElogbeta with shape: {lda_model_instance.expElogbeta.shape}")
         
-        # Monkey patch the LdaModel class to add a topics property if it doesn't exist
-        if not hasattr(ldamodel.LdaModel, 'topics'):
-            def get_topics(self):
-                return self.expElogbeta
-            
-            # Add the property to the class, not just this instance
-            ldamodel.LdaModel.topics = property(get_topics)
-
-        lda_model_instance.alpha = np.copy(self.alphas_np)  # Ensure alpha is also set
+        # Directly set a topics attribute on the instance
+        lda_model_instance.topics = current_exp_elogbeta.T
+        logger.debug(f"Set topics attribute directly with shape: {lda_model_instance.topics.shape}")
+        
+        # Also set state.expElogbeta if state exists
+        if hasattr(lda_model_instance, 'state'):
+            if not hasattr(lda_model_instance.state, 'expElogbeta'):
+                lda_model_instance.state.expElogbeta = current_exp_elogbeta.T
+                logger.debug("Set state.expElogbeta")
+        
+        # Ensure alpha is also set
+        lda_model_instance.alpha = np.copy(self.alphas_np)
+        
+        # Check if the topics attribute is now available
+        logger.debug(f"After updates, LDA model has topics attr: {hasattr(lda_model_instance, 'topics')}")
+        
         return lda_model_instance
 
     def lda_seq_infer_jax(
