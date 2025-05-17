@@ -42,7 +42,7 @@ DEFAULT_JAX_OBS_OPTIMIZER_STEPS = 50
 LDASQE_EM_THRESHOLD_JAX = 1e-4
 
 
-@jax.jit
+@jax.jit(static_argnums=(4,)) # num_time_slices is static
 def jax_compute_post_mean_scan(
     obs_word: jnp.ndarray,  # (T)
     fwd_variance_word: jnp.ndarray,  # (T+1)
@@ -112,13 +112,14 @@ def jax_compute_post_mean_scan(
     return mean_word_out, fwd_mean_word_out
 
 
-@jax.jit
+@jax.jit(static_argnums=(2,)) # num_time_slices is static
 def jax_compute_post_variance_scan(
     obs_variance_scalar: jnp.ndarray,  # JAX scalar
     chain_variance_scalar: jnp.ndarray,  # JAX scalar
     num_time_slices: int,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:  # variance_out (T+1), fwd_variance_out (T+1)
 
+    T = num_time_slices # T is now static for this compilation
     # Use the dtype from input JAX scalars
     dtype = obs_variance_scalar.dtype
 
@@ -142,7 +143,7 @@ def jax_compute_post_variance_scan(
         fwd_var_scan_body, initial_fwd_var_carry, jnp.arange(num_time_slices)
     )
 
-    fwd_variance_out = jnp.zeros(T + 1, dtype=dtype)
+    fwd_variance_out = jnp.zeros(num_time_slices + 1, dtype=dtype) # Use num_time_slices directly as it's static
     fwd_variance_out = fwd_variance_out.at[0].set(initial_fwd_var_carry)
     fwd_variance_out = fwd_variance_out.at[1:].set(fwd_var_values_1_to_T)
 
@@ -168,15 +169,15 @@ def jax_compute_post_variance_scan(
         )
         return var_curr, var_curr
 
-    initial_bwd_var_carry = fwd_variance_out[T]
+    initial_bwd_var_carry = fwd_variance_out[num_time_slices] # Use num_time_slices directly
     scan_bwd_inputs_var = jnp.flip(fwd_variance_out[:-1])
     _, var_values_T_minus_1_to_0_rev = jax.lax.scan(
         bwd_var_scan_body, initial_bwd_var_carry, scan_bwd_inputs_var
     )
 
-    variance_out = jnp.zeros(T + 1, dtype=dtype)
-    variance_out = variance_out.at[T].set(fwd_variance_out[T])
-    variance_out = variance_out.at[:T].set(jnp.flip(var_values_T_minus_1_to_0_rev))
+    variance_out = jnp.zeros(num_time_slices + 1, dtype=dtype) # Use num_time_slices directly
+    variance_out = variance_out.at[num_time_slices].set(fwd_variance_out[num_time_slices]) # Use num_time_slices
+    variance_out = variance_out.at[:num_time_slices].set(jnp.flip(var_values_T_minus_1_to_0_rev)) # Use num_time_slices
 
     return variance_out, fwd_variance_out
 
@@ -246,8 +247,9 @@ def jax_objective_for_word_obs(
 # Pre-compile the gradient function
 # Note: JITting jax.grad(jax_objective_for_word_obs) directly.
 # argnums=0 means differentiate w.r.t. x_obs_w
+# num_time_slices (index 7 in jax_objective_for_word_obs) must be static.
 grad_fn_jax_objective_for_word_obs = jax.jit(
-    jax.grad(jax_objective_for_word_obs, argnums=0)
+    jax.grad(jax_objective_for_word_obs, argnums=0), static_argnums=(7,)
 )
 
 
