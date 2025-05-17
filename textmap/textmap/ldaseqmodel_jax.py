@@ -117,6 +117,15 @@ jax_compute_post_mean_scan = jax.jit(
     _jax_compute_post_mean_scan_uncompiled, static_argnums=(4,)
 )
 
+# Non-JIT version for use in contexts where tracing might cause issues
+def jax_compute_post_mean_scan_unjitted(
+    obs_word, fwd_variance_word, chain_variance, obs_variance, num_time_slices
+):
+    """Unjitted version of post mean computation for use in contexts where JIT tracing causes issues."""
+    return _jax_compute_post_mean_scan_uncompiled(
+        obs_word, fwd_variance_word, chain_variance, obs_variance, num_time_slices
+    )
+
 
 # Define the original function
 def _jax_compute_post_variance_scan_uncompiled(
@@ -350,12 +359,26 @@ class sslm_jax(utils.SaveLoad):
         self.fwd_variance = jnp.tile(single_fwd_variance_out[jnp.newaxis, :], (W, 1))
 
         # Compute post mean (vmapped as it depends on self.obs and self.fwd_variance)
+        # Use unjitted version to avoid tracing issues with dynamic shapes
         vmap_compute_mean = jax.vmap(
-            jax_compute_post_mean_scan, in_axes=(0, 0, None, None, None), out_axes=0
+            jax_compute_post_mean_scan_unjitted, in_axes=(0, 0, None, None, None), out_axes=0
         )
-        all_means, all_fwd_means = vmap_compute_mean(
-            self.obs, self.fwd_variance, self.chain_variance, self.obs_variance, T
-        )
+        try:
+            all_means, all_fwd_means = vmap_compute_mean(
+                self.obs, self.fwd_variance, self.chain_variance, self.obs_variance, T
+            )
+        except TypeError as e:
+            # Fallback to loop-based computation if vmap fails
+            logger.warning(f"JAX vmap failed with error: {e}. Falling back to loop-based computation.")
+            all_means = np.zeros_like(self.mean)
+            all_fwd_means = np.zeros_like(self.fwd_mean)
+            for w_idx in range(self.vocab_len):
+                all_means[w_idx], all_fwd_means[w_idx] = jax_compute_post_mean_scan_unjitted(
+                    self.obs[w_idx], self.fwd_variance[w_idx], 
+                    self.chain_variance, self.obs_variance, T
+                )
+            all_means = jnp.array(all_means)
+            all_fwd_means = jnp.array(all_fwd_means)
         self.mean = all_means
         self.fwd_mean = all_fwd_means
 
@@ -510,11 +533,24 @@ class sslm_jax(utils.SaveLoad):
         self.fwd_variance = jnp.tile(single_fwd_variance_out[jnp.newaxis, :], (W, 1))
 
         vmap_compute_mean = jax.vmap(
-            jax_compute_post_mean_scan, in_axes=(0, 0, None, None, None), out_axes=0
+            jax_compute_post_mean_scan_unjitted, in_axes=(0, 0, None, None, None), out_axes=0
         )
-        current_means, current_fwd_means = vmap_compute_mean(
-            self.obs, self.fwd_variance, self.chain_variance, self.obs_variance, T
-        )
+        try:
+            current_means, current_fwd_means = vmap_compute_mean(
+                self.obs, self.fwd_variance, self.chain_variance, self.obs_variance, T
+            )
+        except TypeError as e:
+            # Fallback to loop-based computation if vmap fails
+            logger.warning(f"JAX vmap failed with error: {e}. Falling back to loop-based computation.")
+            current_means = np.zeros_like(self.mean)
+            current_fwd_means = np.zeros_like(self.fwd_mean)
+            for w_idx in range(self.vocab_len):
+                current_means[w_idx], current_fwd_means[w_idx] = jax_compute_post_mean_scan_unjitted(
+                    self.obs[w_idx], self.fwd_variance[w_idx], 
+                    self.chain_variance, self.obs_variance, T
+                )
+            current_means = jnp.array(current_means)
+            current_fwd_means = jnp.array(current_fwd_means)
         self.mean = current_means
         self.fwd_mean = current_fwd_means
         self.zeta = self.update_zeta_jax()
