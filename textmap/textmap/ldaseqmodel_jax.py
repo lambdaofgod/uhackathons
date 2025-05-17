@@ -1329,13 +1329,9 @@ class LdaPost(utils.SaveLoad):
         self.gamma = self.update_gamma()
 
         model = "DTM"
-
-        if model == "DTM" or sslm is None:
-            self.phi, self.log_phi = self.update_phi(doc_number, time)
-        elif model == "DIM" and sslm is not None:
-            self.phi, self.log_phi = self.update_phi_fixed(
-                doc_number, time, sslm, g3_matrix, g4_matrix, g5_matrix
-            )
+        # Since we're in DTM mode and not DIM mode, we don't need to check for sslm
+        # Just update phi and log_phi directly
+        self.phi, self.log_phi = self.update_phi(doc_number, time)
 
         lhood = self.compute_lda_lhood()
         converged = np.fabs((lhood_old - lhood) / (lhood_old * total))
@@ -1346,13 +1342,9 @@ class LdaPost(utils.SaveLoad):
             lhood_old = lhood
             self.gamma = self.update_gamma()
             model = "DTM"
-
-            if model == "DTM" or sslm is None:
-                self.phi, self.log_phi = self.update_phi(doc_number, time)
-            elif model == "DIM" and sslm is not None:
-                self.phi, self.log_phi = self.update_phi_fixed(
-                    doc_number, time, sslm, g3_matrix, g4_matrix, g5_matrix
-                )
+            # Since we're in DTM mode and not DIM mode, we don't need to check for sslm
+            # Just update phi and log_phi directly
+            self.phi, self.log_phi = self.update_phi(doc_number, time)
 
             lhood = self.compute_lda_lhood()
             converged = np.fabs((lhood_old - lhood) / (lhood_old * total))
