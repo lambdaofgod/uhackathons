@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
-from textmap.ldaseqmodel_jax import LdaSeqModelJax as LdaSeqModel
+
+# from textmap.ldaseqmodel_jax import LdaSeqModelJax as LdaSeqModel
+from textmap.ldaseqmodel import LdaSeqModel
 from gensim.corpora import Dictionary
 from typing import List, Dict, Any, Tuple, Optional, Union
 import pandas as pd
