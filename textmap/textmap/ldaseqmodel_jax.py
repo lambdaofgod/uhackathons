@@ -692,11 +692,22 @@ class LdaSeqModelJax(utils.SaveLoad):
             )
 
         # Instead of setting topics directly (which doesn't exist in LdaModel),
-        # we need to set both expElogbeta and create a topics attribute
+        # we need to set expElogbeta and add a topics attribute that LdaPost can access
         lda_model_instance.expElogbeta = current_exp_elogbeta.T  # Transpose to match LdaModel's expected shape
         
-        # Add a topics attribute that LdaPost can access
-        lda_model_instance.topics = current_exp_elogbeta.T
+        # Create a topics attribute as a property-like object that behaves like a 2D array
+        # This allows LdaPost to access it with lda.topics[word_id, topic_id] syntax
+        class TopicsAccessor:
+            def __init__(self, matrix):
+                self.matrix = matrix
+                
+            def __getitem__(self, indices):
+                if isinstance(indices, tuple) and len(indices) == 2:
+                    word_id, topic_id = indices
+                    return self.matrix[topic_id, word_id]
+                return self.matrix[indices]
+        
+        lda_model_instance.topics = TopicsAccessor(current_exp_elogbeta.T)
 
         lda_model_instance.alpha = np.copy(self.alphas_np)  # Ensure alpha is also set
         return lda_model_instance
