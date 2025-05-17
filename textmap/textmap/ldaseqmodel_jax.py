@@ -42,8 +42,8 @@ DEFAULT_JAX_OBS_OPTIMIZER_STEPS = 50
 LDASQE_EM_THRESHOLD_JAX = 1e-4
 
 
-@jax.jit(static_argnums=(4,)) # num_time_slices is static
-def jax_compute_post_mean_scan(
+# Define the original function
+def _jax_compute_post_mean_scan_uncompiled(
     obs_word: jnp.ndarray,  # (T)
     fwd_variance_word: jnp.ndarray,  # (T+1)
     chain_variance: float,
@@ -111,9 +111,12 @@ def jax_compute_post_mean_scan(
 
     return mean_word_out, fwd_mean_word_out
 
+# JIT compile the function
+jax_compute_post_mean_scan = jax.jit(_jax_compute_post_mean_scan_uncompiled, static_argnums=(4,))
 
-@jax.jit(static_argnums=(2,)) # num_time_slices is static
-def jax_compute_post_variance_scan(
+
+# Define the original function
+def _jax_compute_post_variance_scan_uncompiled(
     obs_variance_scalar: jnp.ndarray,  # JAX scalar
     chain_variance_scalar: jnp.ndarray,  # JAX scalar
     num_time_slices: int,
@@ -180,6 +183,9 @@ def jax_compute_post_variance_scan(
     variance_out = variance_out.at[:num_time_slices].set(jnp.flip(var_values_T_minus_1_to_0_rev)) # Use num_time_slices
 
     return variance_out, fwd_variance_out
+
+# JIT compile the function
+jax_compute_post_variance_scan = jax.jit(_jax_compute_post_variance_scan_uncompiled, static_argnums=(2,))
 
 
 def jax_objective_for_word_obs(
