@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from gensim.models.ldaseqmodel import LdaSeqModel
+from textmap.ldaseqmodel_jax import LdaSeqModelJax as LdaSeqModel
 from gensim.corpora import Dictionary
 from typing import List, Dict, Any, Tuple, Optional, Union
 import pandas as pd
@@ -133,7 +133,6 @@ class DynamicTopicModel:
                     id2word=self.id2word,
                     time_slice=self.time_slices,
                     num_topics=self.num_topics,
-                    initialize="gensim",
                     **self.lda_kwargs,
                 )
                 print("LdaSeqModel training complete.")
@@ -250,7 +249,7 @@ class DynamicTopicModel:
         topics = None
         topic_id = None
         topic_terms = None
-        
+
         try:
             # Create a list to store all topic data
             all_topics_data = []
@@ -286,15 +285,20 @@ class DynamicTopicModel:
             return pd.DataFrame(all_topics_data)
         except Exception as e:
             import traceback
+
             error_trace = traceback.format_exc()
             print(f"Error in get_topics:\n{error_trace}")
-            
+
             # Safely report variable types
             topics_type = type(topics).__name__ if topics is not None else "None"
             topic_id_type = type(topic_id).__name__ if topic_id is not None else "None"
-            topic_terms_type = type(topic_terms).__name__ if topic_terms is not None else "None"
-            
-            raise RuntimeError(f"Failed to get topics: {e}\nVariable types: topics={topics_type}, topic_id={topic_id_type}, topic_terms={topic_terms_type}\nFull traceback:\n{error_trace}")
+            topic_terms_type = (
+                type(topic_terms).__name__ if topic_terms is not None else "None"
+            )
+
+            raise RuntimeError(
+                f"Failed to get topics: {e}\nVariable types: topics={topics_type}, topic_id={topic_id_type}, topic_terms={topic_terms_type}\nFull traceback:\n{error_trace}"
+            )
 
 
 if __name__ == "__main__":
