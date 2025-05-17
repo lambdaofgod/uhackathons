@@ -1158,7 +1158,9 @@ class LdaPost(utils.SaveLoad):
         n = 0  # keep track of iterations for phi, log_phi
         for word_id, count in self.doc:
             for k in range(num_topics):
-                self.log_phi[n][k] = dig[k] + self.lda.topics[word_id][k]
+                # Access topic-word distribution through expElogbeta instead of topics
+                # expElogbeta is shaped (num_topics, vocab_len)
+                self.log_phi[n][k] = dig[k] + self.lda.expElogbeta[k][word_id]
 
             log_phi_row = self.log_phi[n]
             phi_row = self.phi[n]
@@ -1247,12 +1249,14 @@ class LdaPost(utils.SaveLoad):
             n = 0
             for word_id, count in self.doc:
                 if self.phi[n][k] > 0:
+                    # Access topic-word distribution through expElogbeta instead of topics
+                    # expElogbeta is shaped (num_topics, vocab_len)
                     lhood_term += (
                         count
                         * self.phi[n][k]
                         * (
                             e_log_theta_k
-                            + self.lda.topics[word_id][k]
+                            + self.lda.expElogbeta[k][word_id]
                             - self.log_phi[n][k]
                         )
                     )
