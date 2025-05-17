@@ -461,11 +461,24 @@ class sslm_jax(utils.SaveLoad):
         self.obs = jnp.stack(new_obs_list, axis=0)
 
         vmap_compute_mean = jax.vmap(
-            jax_compute_post_mean_scan, in_axes=(0, 0, None, None, None), out_axes=0
+            jax_compute_post_mean_scan_unjitted, in_axes=(0, 0, None, None, None), out_axes=0
         )
-        all_means, all_fwd_means = vmap_compute_mean(
-            self.obs, self.fwd_variance, self.chain_variance, self.obs_variance, T
-        )
+        try:
+            all_means, all_fwd_means = vmap_compute_mean(
+                self.obs, self.fwd_variance, self.chain_variance, self.obs_variance, T
+            )
+        except TypeError as e:
+            # Fallback to loop-based computation if vmap fails
+            logger.warning(f"JAX vmap failed with error: {e}. Falling back to loop-based computation.")
+            all_means = np.zeros_like(self.mean)
+            all_fwd_means = np.zeros_like(self.fwd_mean)
+            for w_idx in range(self.vocab_len):
+                all_means[w_idx], all_fwd_means[w_idx] = jax_compute_post_mean_scan_unjitted(
+                    self.obs[w_idx], self.fwd_variance[w_idx], 
+                    self.chain_variance, self.obs_variance, T
+                )
+            all_means = jnp.array(all_means)
+            all_fwd_means = jnp.array(all_fwd_means)
         self.mean = all_means
         self.fwd_mean = all_fwd_means
 
