@@ -95,9 +95,14 @@ with gr.Blocks() as demo:
             
             # Add a table to display topics
             topics_table = gr.DataFrame(
-                label="Topics Over Time",
-                headers=["Time Period", "Topic ID", "Top Terms"],
+                label="Topics",
                 interactive=False,
+                visible=False
+            )
+            
+            # Add a plotly figure for topics over time visualization
+            topics_over_time_plot = gr.Plot(
+                label="Topics Over Time",
                 visible=False
             )
 
@@ -223,41 +228,47 @@ with gr.Blocks() as demo:
         status_message, df = load_and_preprocess_data(file_input, granularity, text_col, title_col, date_col)
         
         if df is None:
-            return status_message, None, None, gr.update(visible=False)
+            return status_message, None, None, gr.update(visible=False), gr.update(visible=False)
         
         try:
             # Create and train the dynamic topic model
             model = DynamicTopicModel(
                 num_topics=10,  # You could make this configurable
                 text_col="text",  # Use the standardized text column
-                period_col="time_period"  # Use the time_period column from data_loading
+                time_col="creation_date"  # Use the date column from data_loading
             )
             
-            model.fit(df)
+            # Train the model with 20 time bins
+            model.fit(df, nr_bins=20)
             
-            # Get topics for all time periods
-            topics_df = model.get_topics()
+            # Get topics information
+            topics_df = model.get_topics(top_n_topics=10)
             
-            # Format the DataFrame for display
-            display_df = topics_df.rename(columns={
-                "time_period": "Time Period",
-                "topic_id": "Topic ID",
-                "terms": "Top Terms"
-            })
+            # Create the topics over time visualization
+            topics_over_time_fig = model.visualize_topics_over_time(top_n_topics=10)
             
             return (
-                f"{status_message}\nSuccessfully trained topic model with {model.num_topics} topics.",
+                f"{status_message}\nSuccessfully trained topic model with BERTopic.",
                 df,
                 model,
-                gr.update(visible=True, value=display_df)
+                gr.update(visible=True, value=topics_df),
+                gr.update(visible=True, value=topics_over_time_fig)
             )
         except Exception as e:
-            return f"{status_message}\nError training topic model: {str(e)}", df, None, gr.update(visible=False)
+            import traceback
+            error_trace = traceback.format_exc()
+            return (
+                f"{status_message}\nError training topic model: {str(e)}\n{error_trace}", 
+                df, 
+                None, 
+                gr.update(visible=False),
+                gr.update(visible=False)
+            )
 
     submit_button.click(
         fn=train_and_display_topics,
         inputs=[file_input, granularity_input, text_column, title_column, date_column],
-        outputs=[output_display, df_state, model_state, topics_table],
+        outputs=[output_display, df_state, model_state, topics_table, topics_over_time_plot],
     )
 
 if __name__ == "__main__":
