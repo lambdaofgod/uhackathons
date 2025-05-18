@@ -235,7 +235,7 @@ with gr.Blocks() as demo:
             model = DynamicTopicModel(
                 num_topics=10,  # You could make this configurable
                 text_col="text",  # Use the standardized text column
-                time_col="creation_date"  # Use the date column from data_loading
+                time_col="date"  # Use the standardized date column from data_loading
             )
             
             # Train the model with 20 time bins
