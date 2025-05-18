@@ -56,32 +56,33 @@ class DynamicTopicModel:
         # Initialize BERTopic model if not provided
         if self.bertopic_model is None:
             self.bertopic_model = BERTopic(
-                nr_topics=self.num_topics, 
-                verbose=self.verbose,
-                **self.bertopic_kwargs
+                nr_topics=self.num_topics, verbose=self.verbose, **self.bertopic_kwargs
             )
 
-        print(f"Model configured with text_col='{self.text_col}', time_col='{self.time_col}'.")
-        
+        print(
+            f"Model configured with text_col='{self.text_col}', time_col='{self.time_col}'."
+        )
+
         try:
             # Extract text and timestamps
             texts = df[self.text_col].tolist()
             timestamps = df[self.time_col].tolist()
-            
+
             # Fit the BERTopic model
             print("Training BERTopic model...")
             topics, probs = self.bertopic_model.fit_transform(texts)
             print("BERTopic model training complete.")
-            
+
             # Generate topics over time
             print(f"Generating topics over time with {nr_bins} bins...")
             self.topics_over_time = self.bertopic_model.topics_over_time(
                 texts, timestamps, nr_bins=nr_bins
             )
             print("Topics over time generation complete.")
-            
+
         except Exception as e:
             import traceback
+
             error_trace = traceback.format_exc()
             raise RuntimeError(f"Failed to train BERTopic model: {e}\n{error_trace}")
 
@@ -113,6 +114,7 @@ class DynamicTopicModel:
             return topics, probs
         except Exception as e:
             import traceback
+
             error_trace = traceback.format_exc()
             raise RuntimeError(f"Failed to transform documents: {e}\n{error_trace}")
 
@@ -134,16 +136,17 @@ class DynamicTopicModel:
         try:
             # Get topic information from BERTopic
             topic_info = self.bertopic_model.get_topic_info()
-            
+
             # Filter to top N topics (excluding -1 which is the outlier topic)
-            filtered_topics = topic_info[topic_info['Topic'] != -1].head(top_n_topics)
-            
+            filtered_topics = topic_info[topic_info["Topic"] != -1].head(top_n_topics)
+
             return filtered_topics
         except Exception as e:
             import traceback
+
             error_trace = traceback.format_exc()
             raise RuntimeError(f"Failed to get topics: {e}\n{error_trace}")
-    
+
     def get_topics_over_time(self) -> pd.DataFrame:
         """
         Get the topics over time data.
@@ -152,12 +155,10 @@ class DynamicTopicModel:
             DataFrame with columns: 'Topic', 'Words', 'Frequency', 'Timestamp'
         """
         if self.topics_over_time is None:
-            raise RuntimeError(
-                "Topics over time not available. Call fit() first."
-            )
-        
+            raise RuntimeError("Topics over time not available. Call fit() first.")
+
         return self.topics_over_time
-    
+
     def visualize_topics(self, **kwargs):
         """
         Visualize the topics using BERTopic's visualization.
@@ -172,9 +173,9 @@ class DynamicTopicModel:
             raise RuntimeError(
                 "The BERTopic model is not initialized. Call fit() first or provide a model."
             )
-        
+
         return self.bertopic_model.visualize_topics(**kwargs)
-    
+
     def visualize_topics_over_time(self, top_n_topics: int = 20, **kwargs):
         """
         Visualize the topics over time using BERTopic's visualization.
@@ -190,28 +191,7 @@ class DynamicTopicModel:
             raise RuntimeError(
                 "The BERTopic model or topics over time not initialized. Call fit() first."
             )
-        
+
         return self.bertopic_model.visualize_topics_over_time(
-            self.topics_over_time, 
-            top_n_topics=top_n_topics,
-            **kwargs
+            self.topics_over_time, top_n_topics=top_n_topics, **kwargs
         )
-
-
-if __name__ == "__main__":
-    print("DynamicTopicModel module loaded. Run tests to verify functionality.")
-    
-    # Example usage:
-    # import pandas as pd
-    # from textmap.dynamic_topic_models import DynamicTopicModel
-    # 
-    # # Load data
-    # df = pd.read_csv("data/roam_nodes_df.csv")
-    # 
-    # # Create and fit model
-    # model = DynamicTopicModel(text_col="text", time_col="creation_date")
-    # model.fit(df, nr_bins=20)
-    # 
-    # # Visualize topics over time
-    # viz = model.visualize_topics_over_time(top_n_topics=20)
-    # viz.write_html("topics_over_time.html")
