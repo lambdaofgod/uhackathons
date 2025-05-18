@@ -230,6 +230,11 @@ with gr.Blocks() as demo:
         if df is None:
             return status_message, None, None, gr.update(visible=False), gr.update(visible=False)
         
+        # Debug information about the dataframe
+        debug_info = f"\nDataFrame info:\n- Shape: {df.shape}\n- Columns: {list(df.columns)}"
+        print(debug_info)
+        status_message += debug_info
+        
         try:
             # Create and train the dynamic topic model
             model = DynamicTopicModel(
@@ -237,6 +242,16 @@ with gr.Blocks() as demo:
                 text_col="text",  # Use the standardized text column
                 time_col="date"  # Use the standardized date column from data_loading
             )
+            
+            # Debug the first few rows to verify data
+            print("\nFirst 3 rows of DataFrame:")
+            print(df.head(3))
+            
+            # Check if required columns exist
+            if "text" not in df.columns:
+                raise ValueError(f"Text column 'text' not found in DataFrame. Available columns: {list(df.columns)}")
+            if "date" not in df.columns:
+                raise ValueError(f"Date column 'date' not found in DataFrame. Available columns: {list(df.columns)}")
             
             # Train the model with 20 time bins
             model.fit(df, nr_bins=20)

@@ -48,10 +48,16 @@ class DynamicTopicModel:
         Returns:
             Self for method chaining.
         """
+        # Debug information
+        print(f"DataFrame shape: {df.shape}")
+        print(f"DataFrame columns: {list(df.columns)}")
+        print(f"Looking for text column: '{self.text_col}' and time column: '{self.time_col}'")
+        
+        # Check if columns exist
         if self.text_col not in df.columns:
-            raise ValueError(f"Text column '{self.text_col}' not found in DataFrame.")
+            raise ValueError(f"Text column '{self.text_col}' not found in DataFrame. Available columns: {list(df.columns)}")
         if self.time_col not in df.columns:
-            raise ValueError(f"Time column '{self.time_col}' not found in DataFrame.")
+            raise ValueError(f"Time column '{self.time_col}' not found in DataFrame. Available columns: {list(df.columns)}")
 
         # Initialize BERTopic model if not provided
         if self.bertopic_model is None:
@@ -62,6 +68,11 @@ class DynamicTopicModel:
         print(
             f"Model configured with text_col='{self.text_col}', time_col='{self.time_col}'."
         )
+        
+        # Print sample data to verify content
+        print("\nSample data from DataFrame:")
+        print(f"First 3 rows of text column: {df[self.text_col].head(3).tolist()}")
+        print(f"First 3 rows of time column: {df[self.time_col].head(3).tolist()}")
 
         try:
             # Extract text and timestamps
