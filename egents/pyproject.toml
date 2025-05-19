@@ -9,6 +9,7 @@ dependencies = [
     "fastapi>=0.115.12",
     "fastmcp>=2.2.7",
     "fire>=0.7.0",
+    "ipdb>=0.13.13",
     "requests>=2.32.3",
     "uvicorn>=0.34.2",
 ]

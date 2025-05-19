@@ -1,5 +1,6 @@
 import os
 import asyncio
+from firecrawl.firecrawl import FirecrawlApp
 from typing import List, Dict, Any, Optional
 from llama_index.core.tools import FunctionTool
 from llama_index.core.agent.workflow import AgentWorkflow, ReActAgent, FunctionAgent
@@ -9,14 +10,23 @@ from llama_index.llms.google_genai import GoogleGenAI
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 from phoenix.otel import register
 from llama_index.tools.mcp import BasicMCPClient, McpToolSpec
-
+from llama_index.core.agent.workflow import FunctionAgent, ToolCallResult, ToolCall
+import json
+import pathlib
 
 # Import from our modules
 from tool_helpers import (
-    link_validator,
-    github_commit_checker,
+    LinkValidator,
+    GitHubCommitChecker,
     extract_date,
 )
+
+github_commit_checker = GitHubCommitChecker()
+link_validator = LinkValidator()
+with open(pathlib.Path("~/.keys/firecrawl_key.txt").expanduser()) as f:
+    fc_api_key = f.read().strip()
+    os.environ["FIRECRAWL_API_KEY"] = fc_api_key
+
 
 # Set up tracing
 tracer_provider = register(
@@ -59,17 +69,15 @@ def firecrawl_tool_llamaindex(url: str) -> dict:
     Returns:
        dict: dictionary with markdown and metadata keys
     """
-    # Use the MCP server for scraping
-    import requests
+    fc_app = FirecrawlApp(api_key=fc_api_key)
+    return fc_app.scrape_url(url)
 
-    response = requests.post("http://localhost:8000/scrape", json={"url": url})
-    if response.status_code == 200:
-        return response.json()
-    else:
-        return {
-            "markdown": f"Error scraping URL: {response.status_code}",
-            "metadata": {},
-        }
+
+def setup_searx_mcp_tools(searx_url="http://localhost:8080"):
+    mcp_client = BasicMCPClient(
+        "uvx", args=["mcp-searxng"], env={"SEARXNG_URL": searx_url}
+    )
+    return McpToolSpec(client=mcp_client).to_tool_list()
 
 
 # Create LlamaIndex tools
@@ -91,20 +99,10 @@ firecrawl_scrape_tool = FunctionTool.from_defaults(
     description="Scrape given URL with firecrawl",
 )
 
-
-def setup_searxng_mcp_tools():
-    # We consider there is a mcp server running on 127.0.0.1:8000, or you can use the mcp client to connect to your own mcp server.
-    mcp_client = BasicMCPClient(
-        "uvx", args=["mcp-searxng"], env={"SEARXNG_URL": "http://localhost:8080"}
-    )
-    mcp_tool = McpToolSpec(client=mcp_client)
-    return mcp_tool.to_tool_list()
-
-
-search_tools = setup_searxng_mcp_tools()
+search_tools = setup_searx_mcp_tools()
 
 anthropic_model_name = "claude-3-7-sonnet-20250219"
-gemini_model_name = "gemini-2.5-pro-preview-05-06"
+gemini_model_name = "gemini-2.5-pro-exp-03-25"
 # Initialize LLM models
 anthropic_llm = Anthropic(
     model=anthropic_model_name,
@@ -135,9 +133,9 @@ web_llamaindex_agent = FunctionAgent(
     llm=anthropic_llm,
     verbose=True,
     name="WebAgent",
-    description="Agent capable of searching webpages. Returns the information useful for answering a given queries. It tries to minimize the number of calls to search tool whenever it gets links in input. Uses `ScrapingAgent` to find information from specific webpages. For searching repositories on github scrape `https://github.com/search?q=<SEARCH QUERY>&type=repositories` instead of using web search",
-    system_prompt="Agent capable of searching webpages. Returns the information useful for answering a given queries. It tries to minimize the number of calls to search tool whenever it gets links in input. Uses `ScrapingAgent` to find information from specific webpages. For searching repositories on github scrape `https://github.com/search?q=<SEARCH QUERY>&type=repositories` instead of using web search",
-    max_iterations=15,
+    description="Agent capable of searching the web. Returns the information useful for answering a given queries. It tries to minimize the number of calls to search tool whenever it gets links in input. Uses `ScrapingAgent` to find information from specific webpages.",
+    system_prompt="Agent capable of searching webpages. Returns the information useful for answering a given queries. It tries to minimize the number of calls to search tool whenever it gets links in input. Uses `ScrapingAgent` to find information from specific webpages. The answers should cite the relevant sources in markdown format (the citation should be a number of the source like [1], and the links should be stored at the end of the response)",
+    max_iterations=3,
 )
 
 assistant_agent = ReActAgent(
@@ -146,7 +144,7 @@ assistant_agent = ReActAgent(
     verbose=True,
     name="Assistant",
     description="Generalist agent that uses helper WebAgent for searching the web. WebAgent is used carefully because of the web search rate limits - if relevant links were collected, the WebAgent should receive them",
-    max_iterations=15,
+    max_iterations=5,
 )
 
 thinking_llamaindex_agent = ReActAgent(
@@ -173,12 +171,23 @@ assistant_workflow = AgentWorkflow(
 
 
 # Function to get agent output using LlamaIndex
-async def run_task(prompt, mode="default", ctx=None):
+async def run_task(prompt, mode="default", ctx=None, verbose=True):
     if mode == "thinking":
         workflow = thinking_llamaindex_agent
     else:
         workflow = assistant_workflow
-    return await workflow.run(user_msg=prompt, ctx=ctx)
+    handler = workflow.run(prompt, ctx=ctx)
+    async for event in handler.stream_events():
+        if verbose and type(event) == ToolCall:
+            print(f"Calling tool {event.tool_name}")
+
+            print(json.dumps(event.tool_kwargs))
+        elif verbose and type(event) == ToolCallResult:
+            print(f"Tool {event.tool_name} returned")
+            print(event.tool_output.content)
+
+    response = await handler
+    return response
 
 
 def get_agent_output(prompt, mode="default", ctx=None):
@@ -188,6 +197,5 @@ def get_agent_output(prompt, mode="default", ctx=None):
     response = asyncio.run(run_task(prompt, mode=mode, ctx=ctx))
 
     # Print the response in real-time (simulating streaming)
-    print(response.response)
 
-    return response.response
+    return response.response.content

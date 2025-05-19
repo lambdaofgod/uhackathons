@@ -1,0 +1,243 @@
+:PROPERTIES:
+:ID:       dd1fef9e-ec81-4921-b367-a14cbccee705
+:END:
+#+title: egents
+
+* TL;DR
+
+Egents have a bunch of tools for working with agents in org mode using babel (+ python)
+
+The setup cell launches the session with agent, and then the cells inserted with =M-x egents/insert-response-code-block= reuse this session and work as AI cells like in org-ai
+
+* Setup
+
+** Models
+
+#+BEGIN_SRC python :session egents :python "~/Projects/uhackathons/egents/.venv/bin/python" :async
+import pathlib
+import os
+
+api_key_path = "~/.keys/anthropic_key.txt"
+
+with open(pathlib.Path(api_key_path).expanduser()) as f:
+    api_key = f.read().strip()
+    os.environ["ANTHROPIC_API_KEY"] = api_key
+
+with open(pathlib.Path("~/.keys/gemini_api_key.txt").expanduser()) as f:
+    api_key = f.read().strip()
+    os.environ["GEMINI_API_KEY"] = api_key
+
+with open(pathlib.Path("~/.keys/brave.txt").expanduser()) as f:
+    api_key = f.read().strip()
+    os.environ["BRAVE_API_KEY"] = api_key
+
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session egents :exports both
+from llamaindex_egents import get_agent_output
+#+END_SRC
+
+#+RESULTS:
+: None
+
+** Example run
+
+#+BEGIN_SRC python :session egents :exports both :async
+prompt = """
+What is the MCP (Model Context Protocol)? What is its purpose?
+""".strip()
+agent_response = get_agent_output(prompt)
+agent_response
+#+END_SRC
+
+#+RESULTS:
+: /var/folders/t7/9zd9yqf17_zbfq2hwm8tv9ym0000gn/T/babel-CFzyTI/python-oPKK4R
+
+#+BEGIN_SRC python :session egents.org  :exports both :async
+prompt = """
+I want to develop a domain-specific assistant agent that will use several tools. Some of these tools I will implement in MCP myself, and some will use libraries that I can run with `uvx`. Search the web for information how to structure such projects - it seems like using multiple tools can get pretty messy and someone already tackled a similar agent tool architecture problem.
+
+Note I do not ask about agent architecture, I know how to do it but I'm not clear about how to organize tools
+""".strip()
+agent_response = get_agent_output(prompt)
+agent_response
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+assistant: Based on my searches, I've gathered some useful information about organizing multiple tools for domain-specific assistant agents. Let me provide you with a structured approach to organizing your project:
+
+# Organizing Multiple Tools for Domain-Specific Assistant Agents
+
+## Project Structure Recommendations
+
+Based on the information found, here's a recommended approach for organizing your project with multiple tools, including both MCP-based tools and those using `uvx`:
+
+### 1. Modular Tool Organization
+
+```
+your-agent-project/
+├── tools/
+│   ├── __init__.py
+│   ├── mcp_tools/
+│   │   ├── __init__.py
+│   │   ├── tool1.py
+│   │   ├── tool2.py
+│   │   └── mcp_server.py
+│   ├── uvx_tools/
+│   │   ├── __init__.py
+│   │   ├── tool3.py
+│   │   └── tool4.py
+│   └── common/
+│       ├── __init__.py
+│       └── utils.py
+├── agent/
+│   ├── __init__.py
+│   ├── main.py
+│   └── config.py
+├── .mcp.json        # MCP configuration file
+├── pyproject.toml
+└── README.md
+```
+
+### 2. MCP Tool Implementation
+
+For your MCP tools, you can follow the structure recommended by the Model Context Protocol Python SDK [1]. The `.mcp.json` file should be checked into version control to share MCP servers with your team [2].
+
+Each MCP tool should be implemented as a separate module with a clear interface. The `mcp_server.py` file can serve as the entry point for your MCP server.
+
+### 3. UVX Tool Integration
+
+For tools that you'll run with `uvx`, organize them in a separate directory. According to best practices [3], you should:
+
+- Use `uvx` for tools you need to run occasionally
+- Keep these tools isolated in their own modules
+- Document their usage and dependencies clearly
+
+### 4. Tool Registration and Discovery
+
+Create a registration system that allows your agent to discover and use all available tools:
+
+```python
+# tools/__init__.py
+from typing import Dict, List, Any, Callable
+
+# Tool registry
+_TOOLS: Dict[str, Callable] = {}
+
+def register_tool(name: str, tool_func: Callable):
+    """Register a tool function with a name."""
+    _TOOLS[name] = tool_func
+
+def get_tool(name: str) -> Callable:
+    """Get a tool function by name."""
+    return _TOOLS.get(name)
+
+def list_tools() -> List[str]:
+    """List all available tool names."""
+    return list(_TOOLS.keys())
+
+# Import and register all tools
+from .mcp_tools import tool1, tool2
+from .uvx_tools import tool3, tool4
+```
+
+### 5. Tool Documentation
+
+Create a standardized documentation format for each tool:
+
+```python
+# Example tool implementation
+def my_tool(param1: str, param2: int) -> Any:
+    """
+    Tool description and purpose.
+
+    Args:
+        param1: Description of param1
+        param2: Description of param2
+
+    Returns:
+        Description of return value
+
+    Example:
+        >>> my_tool("example", 42)
+        Expected output
+    """
+    # Implementation
+    pass
+```
+
+### 6. Configuration Management
+
+Use a central configuration system to manage tool settings:
+
+```python
+# config.py
+from typing import Dict, Any
+import json
+
+class Config:
+    def __init__(self, config_path: str = "config.json"):
+        with open(config_path, "r") as f:
+            self._config = json.load(f)
+
+    def get_tool_config(self, tool_name: str) -> Dict[str, Any]:
+        """Get configuration for a specific tool."""
+        return self._config.get("tools", {}).get(tool_name, {})
+```
+
+## Best Practices
+
+1. **Separation of Concerns**: Keep tool implementation separate from agent logic.
+2. **Standardized Interfaces**: Define consistent interfaces for all tools.
+3. **Error Handling**: Implement robust error handling for each tool.
+4. **Testing**: Create unit tests for each tool independently.
+5. **Documentation**: Document each tool's purpose, inputs, outputs, and examples.
+6. **Version Control**: Track tool versions and dependencies.
+
+## Implementation Example
+
+Here's a simple example of how to implement and register a tool:
+
+```python
+# tools/mcp_tools/tool1.py
+from .. import register_tool
+
+def search_database(query: str, limit: int = 10):
+    """
+    Search the database for entries matching the query.
+
+    Args:
+        query: Search query string
+        limit: Maximum number of results to return
+
+    Returns:
+        List of matching database entries
+    """
+    # Implementation
+    results = []  # Your actual implementation here
+    return results
+
+# Register the tool
+register_tool("search_database", search_database)
+```
+
+## Sources:
+[1] https://github.com/modelcontextprotocol/python-sdk
+[2] https://docs.anthropic.com/en/docs/claude-code/tutorials
+[3] https://www.stuartellis.name/articles/python-modern-practices/
+
+Would you like me to elaborate on any specific aspect of this organization structure?
+#+end_example
+
+
+#+BEGIN_SRC python :session egents.org  :exports both
+from llamaindex_egents import app
+
+app.scrape_url("https://humanloop.com/blog/mcp")
+#+END_SRC
+
+#+RESULTS:
