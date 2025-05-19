@@ -7,6 +7,7 @@ import json
 # or from within 'textmap' (e.g., python app.py)
 from textmap.data_loading import load_and_preprocess_data
 from textmap.dynamic_topic_models import DynamicTopicModel
+from bertopic.representation import KeyBERTInspired, OpenAI, MaximalMarginalRelevance
 
 
 def load_file_preview(file_path):
@@ -85,6 +86,14 @@ with gr.Blocks() as demo:
                     choices=["day", "week", "month"],
                     value="month"
                 )
+                
+                representation_model = gr.Dropdown(
+                    label="Representation Model",
+                    choices=["Default", "KeyBERTInspired", "OpenAI", "MaximalMarginalRelevance"],
+                    value="Default",
+                    info="Select the representation model for BERTopic"
+                )
+                
                 submit_button = gr.Button("Visualize Topics")
 
         with gr.Column(scale=3):  # Main content area
@@ -223,7 +232,7 @@ with gr.Blocks() as demo:
     )
 
     # Function to train the model and display topics
-    def train_and_display_topics(file_input, granularity, text_col, title_col, date_col):
+    def train_and_display_topics(file_input, granularity, text_col, title_col, date_col, rep_model):
         # First load and preprocess the data
         status_message, df = load_and_preprocess_data(file_input, granularity, text_col, title_col, date_col)
         
@@ -235,12 +244,26 @@ with gr.Blocks() as demo:
         print(debug_info)
         status_message += debug_info
         
+        # Debug representation model
+        print(f"\nUsing representation model: {rep_model}")
+        status_message += f"\nUsing representation model: {rep_model}"
+        
         try:
+            # Set up the representation model
+            representation_model_instance = None
+            if rep_model == "KeyBERTInspired":
+                representation_model_instance = KeyBERTInspired()
+            elif rep_model == "OpenAI":
+                representation_model_instance = OpenAI()
+            elif rep_model == "MaximalMarginalRelevance":
+                representation_model_instance = MaximalMarginalRelevance()
+            
             # Create and train the dynamic topic model
             model = DynamicTopicModel(
                 num_topics=10,  # You could make this configurable
                 text_col="text",  # Use the standardized text column
-                time_col="date"  # Use the standardized date column from data_loading
+                time_col="date",  # Use the standardized date column from data_loading
+                representation_model=representation_model_instance
             )
             
             # Debug the first few rows to verify data
@@ -282,7 +305,7 @@ with gr.Blocks() as demo:
 
     submit_button.click(
         fn=train_and_display_topics,
-        inputs=[file_input, granularity_input, text_column, title_column, date_column],
+        inputs=[file_input, granularity_input, text_column, title_column, date_column, representation_model],
         outputs=[output_display, df_state, model_state, topics_table, topics_over_time_plot],
     )
 
