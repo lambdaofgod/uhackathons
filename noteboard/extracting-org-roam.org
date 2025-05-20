@@ -1,0 +1,43 @@
+#+title: Extracting Org Roam
+
+#+BEGIN_SRC python :session extracting-org-roam.org  :exports both
+from noteboard import Org
+from pathlib import Path
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session extracting-org-roam.org  :exports both
+org_path = str(Path("~/Projects/org/").expanduser())
+
+roam_nodes_df = Org.to_df(Org.load_dir_generator(org_path, only_root_contents=False))
+roam_nodes_df.shape
+#+END_SRC
+
+#+RESULTS:
+| 7120 | 9 |
+
+
+#+BEGIN_SRC python :session extracting-org-roam.org  :exports both
+roam_nodes_df.to_csv("data/roam_nodes_df.csv")
+#+END_SRC
+
+#+RESULTS:
+: None
+
+
+#+BEGIN_SRC python :session extracting-org-roam.org  :exports both
+roam_df = Org.to_df(Org.load_dir_generator(org_path, only_root_contents=True))
+roam_df.shape
+#+END_SRC
+
+#+RESULTS:
+| 1069 | 9 |
+
+#+BEGIN_SRC python :session extracting-org-roam.org  :exports both
+roam_df.to_csv("data/roam_df.csv")
+#+END_SRC
+
+#+RESULTS:
+: None
