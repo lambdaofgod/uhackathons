@@ -108,6 +108,13 @@ with gr.Blocks() as demo:
                     value="month",
                 )
 
+                min_tokens_input = gr.Number(
+                    label="Minimum Token Count",
+                    value=64,
+                    precision=0,
+                    info="Minimum number of tokens required for a text to be included in the analysis",
+                )
+
                 representation_model = gr.Dropdown(
                     label="Representation Model",
                     choices=[
@@ -262,11 +269,11 @@ with gr.Blocks() as demo:
 
     # Function to train the model and display topics
     def train_and_display_topics(
-        file_input, granularity, text_col, title_col, date_col, rep_model
+        file_input, granularity, text_col, title_col, date_col, min_tokens, rep_model
     ):
         # First load and preprocess the data
         status_message, df = load_and_preprocess_data(
-            file_input, granularity, text_col, title_col, date_col
+            file_input, granularity, text_col, title_col, date_col, min_tokens=min_tokens
         )
 
         if df is None:
@@ -353,6 +360,7 @@ with gr.Blocks() as demo:
             text_column,
             title_column,
             date_column,
+            min_tokens_input,
             representation_model,
         ],
         outputs=[
