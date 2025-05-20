@@ -1,6 +1,7 @@
 import pandas as pd
+import tiktoken
 
-def load_and_preprocess_data(file_input, time_granularity, text_column, title_column, date_column):
+def load_and_preprocess_data(file_input, time_granularity, text_column, title_column, date_column, min_tokens=64):
     """
     Loads data from a JSONL or CSV file, preprocesses it, and calculates the time_period.
 
@@ -10,6 +11,7 @@ def load_and_preprocess_data(file_input, time_granularity, text_column, title_co
         text_column (str): The column containing the text data.
         title_column (str): The column containing the title data.
         date_column (str): The column containing the date data.
+        min_tokens (int): Minimum number of tokens required for a text to be included. Default is 64.
 
     Returns:
         tuple: A tuple containing:
@@ -49,6 +51,22 @@ def load_and_preprocess_data(file_input, time_granularity, text_column, title_co
         
         # Replace the original DataFrame with the standardized one
         df = standardized_df
+        
+        # Filter out texts that are too short based on token count
+        if min_tokens > 0:
+            # Get the cl100k_base encoder which is used by many models including GPT-4
+            enc = tiktoken.get_encoding("cl100k_base")
+            
+            # Count tokens for each text
+            token_counts = df['text'].apply(lambda x: len(enc.encode(x)))
+            
+            # Filter the DataFrame to keep only rows with sufficient tokens
+            original_count = len(df)
+            df = df[token_counts >= min_tokens].reset_index(drop=True)
+            filtered_count = original_count - len(df)
+            
+            if filtered_count > 0:
+                print(f"Filtered out {filtered_count} texts with fewer than {min_tokens} tokens.")
     except Exception as e:
         return f"Error parsing 'date' column: {e}. Ensure dates are in a recognizable format.", None
 
@@ -69,4 +87,4 @@ def load_and_preprocess_data(file_input, time_granularity, text_column, title_co
     else:
         return "Invalid time granularity selected.", None
     
-    return f"File '{file_input.name}' processed. {len(df)} records loaded. Time granularity: {time_granularity}.", df
+    return f"File '{file_input.name}' processed. {len(df)} records loaded. Time granularity: {time_granularity}. Minimum token count: {min_tokens}.", df
