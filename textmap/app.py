@@ -7,7 +7,7 @@ import json
 # or from within 'textmap' (e.g., python app.py)
 from textmap.data_loading import load_and_preprocess_data
 from textmap.dynamic_topic_models import DynamicTopicModel
-from bertopic.representation import KeyBERTInspired, OpenAI, MaximalMarginalRelevance
+from textmap.bertopic_utils import BERTopicUtils
 
 
 def load_file_preview(file_path):
@@ -291,14 +291,16 @@ with gr.Blocks() as demo:
 
         try:
             # Get the representation model using the classmethod
-            representation_model_instance = DynamicTopicModel.get_representation_model(rep_model)
-            
+            topic_modeler = BERTopicUtils.setup_topic_modeler(
+                representation_model_name=rep_model
+            )
+
             # Create and train the dynamic topic model
             model = DynamicTopicModel(
                 num_topics=10,  # You could make this configurable
                 text_col="text",  # Use the standardized text column
                 time_col="date",  # Use the standardized date column from data_loading
-                representation_model=representation_model_instance,
+                bertopic_model=topic_modeler,
             )
 
             # Debug the first few rows to verify data
