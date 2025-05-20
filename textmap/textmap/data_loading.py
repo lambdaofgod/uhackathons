@@ -1,6 +1,162 @@
 import pandas as pd
 import tiktoken
 
+def _validate_inputs(file_input, text_column, title_column, date_column):
+    """
+    Validates the input parameters.
+    
+    Args:
+        file_input: The uploaded file object from Gradio.
+        text_column (str): The column containing the text data.
+        title_column (str): The column containing the title data.
+        date_column (str): The column containing the date data.
+        
+    Returns:
+        tuple: A tuple containing:
+            - error_message (str or None): Error message if validation fails, None otherwise.
+    """
+    if file_input is None:
+        return "Please upload a file and select time granularity."
+    
+    if not all([text_column, title_column, date_column]):
+        return "Please select columns for text, title, and date."
+    
+    return None
+
+def _load_dataframe(file_input):
+    """
+    Loads a dataframe from a file.
+    
+    Args:
+        file_input: The uploaded file object from Gradio.
+        
+    Returns:
+        tuple: A tuple containing:
+            - df (pd.DataFrame or None): The loaded DataFrame, or None if an error occurred.
+            - error_message (str or None): Error message if loading fails, None otherwise.
+    """
+    try:
+        file_ext = file_input.name.split('.')[-1].lower()
+        
+        if file_ext == 'jsonl':
+            df = pd.read_json(file_input.name, lines=True)
+        elif file_ext == 'csv':
+            df = pd.read_csv(file_input.name)
+        else:
+            return None, f"Unsupported file format: {file_ext}. Please upload a CSV or JSONL file."
+        
+        return df, None
+    except Exception as e:
+        return None, f"Error reading file: {e}"
+
+def _check_required_columns(df, required_columns):
+    """
+    Checks if the dataframe contains all required columns.
+    
+    Args:
+        df (pd.DataFrame): The dataframe to check.
+        required_columns (list): List of required column names.
+        
+    Returns:
+        tuple: A tuple containing:
+            - is_valid (bool): True if all required columns are present, False otherwise.
+            - error_message (str or None): Error message if validation fails, None otherwise.
+    """
+    if not all(col in df.columns for col in required_columns):
+        missing_cols = [col for col in required_columns if col not in df.columns]
+        return False, f"Selected columns not found in file: {', '.join(missing_cols)}"
+    
+    return True, None
+
+def _standardize_dataframe(df, text_column, title_column, date_column):
+    """
+    Standardizes the dataframe by renaming columns and converting date.
+    
+    Args:
+        df (pd.DataFrame): The dataframe to standardize.
+        text_column (str): The column containing the text data.
+        title_column (str): The column containing the title data.
+        date_column (str): The column containing the date data.
+        
+    Returns:
+        tuple: A tuple containing:
+            - df (pd.DataFrame or None): The standardized DataFrame, or None if an error occurred.
+            - error_message (str or None): Error message if standardization fails, None otherwise.
+    """
+    try:
+        # Create a standardized DataFrame with the expected column names
+        standardized_df = pd.DataFrame({
+            'text': df[text_column],
+            'title': df[title_column],
+            'date': pd.to_datetime(df[date_column])
+        })
+        
+        return standardized_df, None
+    except Exception as e:
+        return None, f"Error parsing 'date' column: {e}. Ensure dates are in a recognizable format."
+
+def _filter_by_token_count(df, min_tokens):
+    """
+    Filters the dataframe to keep only rows with sufficient tokens.
+    
+    Args:
+        df (pd.DataFrame): The dataframe to filter.
+        min_tokens (int): Minimum number of tokens required for a text to be included.
+        
+    Returns:
+        tuple: A tuple containing:
+            - df (pd.DataFrame): The filtered DataFrame.
+            - filtered_count (int): Number of rows that were filtered out.
+    """
+    if min_tokens <= 0:
+        return df, 0
+    
+    # Get the cl100k_base encoder which is used by many models including GPT-4
+    enc = tiktoken.get_encoding("cl100k_base")
+    
+    # Count tokens for each text
+    token_counts = df['text'].apply(lambda x: len(enc.encode(x)))
+    
+    # Filter the DataFrame to keep only rows with sufficient tokens
+    original_count = len(df)
+    filtered_df = df[token_counts >= min_tokens].reset_index(drop=True)
+    filtered_count = original_count - len(filtered_df)
+    
+    if filtered_count > 0:
+        print(f"Filtered out {filtered_count} texts with fewer than {min_tokens} tokens.")
+    
+    return filtered_df, filtered_count
+
+def _assign_time_periods(df, time_granularity):
+    """
+    Assigns time periods to the dataframe based on the specified granularity.
+    
+    Args:
+        df (pd.DataFrame): The dataframe to process.
+        time_granularity (str): The selected time granularity ('day', 'week', 'month').
+        
+    Returns:
+        tuple: A tuple containing:
+            - df (pd.DataFrame or None): The processed DataFrame, or None if an error occurred.
+            - error_message (str or None): Error message if processing fails, None otherwise.
+    """
+    # Sort by date before assigning periods to ensure consistent period calculation
+    df = df.sort_values(by='date').reset_index(drop=True)
+    
+    if time_granularity == "day":
+        # Using ordinal day number since epoch for a unique integer ID per day
+        df['time_period'] = df['date'].dt.to_period('D').apply(lambda p: p.ordinal)
+    elif time_granularity == "week":
+        # Using ordinal week number since epoch for a unique integer ID per week
+        df['time_period'] = df['date'].dt.to_period('W').apply(lambda p: p.ordinal)
+    elif time_granularity == "month":
+        # Using ordinal month number since epoch for a unique integer ID per month
+        df['time_period'] = df['date'].dt.to_period('M').apply(lambda p: p.ordinal)
+    else:
+        return None, "Invalid time granularity selected."
+    
+    return df, None
+
 def load_and_preprocess_data(file_input, time_granularity, text_column, title_column, date_column, min_tokens=64):
     """
     Loads data from a JSONL or CSV file, preprocesses it, and calculates the time_period.
@@ -18,73 +174,33 @@ def load_and_preprocess_data(file_input, time_granularity, text_column, title_co
             - status_message (str): A message indicating the outcome.
             - df (pd.DataFrame or None): The processed DataFrame, or None if an error occurred.
     """
-    if file_input is None:
-        return "Please upload a file and select time granularity.", None
+    # Validate inputs
+    error_message = _validate_inputs(file_input, text_column, title_column, date_column)
+    if error_message:
+        return error_message, None
     
-    if not all([text_column, title_column, date_column]):
-        return "Please select columns for text, title, and date.", None
-
-    try:
-        file_ext = file_input.name.split('.')[-1].lower()
-        
-        if file_ext == 'jsonl':
-            df = pd.read_json(file_input.name, lines=True)
-        elif file_ext == 'csv':
-            df = pd.read_csv(file_input.name)
-        else:
-            return f"Unsupported file format: {file_ext}. Please upload a CSV or JSONL file.", None
-    except Exception as e:
-        return f"Error reading file: {e}", None
-
+    # Load dataframe
+    df, error_message = _load_dataframe(file_input)
+    if error_message:
+        return error_message, None
+    
+    # Check required columns
     required_columns = [text_column, title_column, date_column]
-    if not all(col in df.columns for col in required_columns):
-        missing_cols = [col for col in required_columns if col not in df.columns]
-        return f"Selected columns not found in file: {', '.join(missing_cols)}", None
-
-    try:
-        # Create a standardized DataFrame with the expected column names
-        standardized_df = pd.DataFrame({
-            'text': df[text_column],
-            'title': df[title_column],
-            'date': pd.to_datetime(df[date_column])
-        })
-        
-        # Replace the original DataFrame with the standardized one
-        df = standardized_df
-        
-        # Filter out texts that are too short based on token count
-        if min_tokens > 0:
-            # Get the cl100k_base encoder which is used by many models including GPT-4
-            enc = tiktoken.get_encoding("cl100k_base")
-            
-            # Count tokens for each text
-            token_counts = df['text'].apply(lambda x: len(enc.encode(x)))
-            
-            # Filter the DataFrame to keep only rows with sufficient tokens
-            original_count = len(df)
-            df = df[token_counts >= min_tokens].reset_index(drop=True)
-            filtered_count = original_count - len(df)
-            
-            if filtered_count > 0:
-                print(f"Filtered out {filtered_count} texts with fewer than {min_tokens} tokens.")
-    except Exception as e:
-        return f"Error parsing 'date' column: {e}. Ensure dates are in a recognizable format.", None
-
-    # Sort by date before assigning periods to ensure consistent period calculation if needed later
-    df = df.sort_values(by='date').reset_index(drop=True)
-
-    if time_granularity == "day":
-        # Using ordinal day number since epoch for a unique integer ID per day
-        df['time_period'] = df['date'].dt.to_period('D').apply(lambda p: p.ordinal)
-    elif time_granularity == "week":
-        # Using ordinal week number since epoch for a unique integer ID per week
-        # .dt.isocalendar().week could also be used if week numbers should reset each year,
-        # but for continuous time periods, ordinal is better.
-        df['time_period'] = df['date'].dt.to_period('W').apply(lambda p: p.ordinal)
-    elif time_granularity == "month":
-        # Using ordinal month number since epoch for a unique integer ID per month
-        df['time_period'] = df['date'].dt.to_period('M').apply(lambda p: p.ordinal)
-    else:
-        return "Invalid time granularity selected.", None
+    is_valid, error_message = _check_required_columns(df, required_columns)
+    if not is_valid:
+        return error_message, None
+    
+    # Standardize dataframe
+    df, error_message = _standardize_dataframe(df, text_column, title_column, date_column)
+    if error_message:
+        return error_message, None
+    
+    # Filter by token count
+    df, filtered_count = _filter_by_token_count(df, min_tokens)
+    
+    # Assign time periods
+    df, error_message = _assign_time_periods(df, time_granularity)
+    if error_message:
+        return error_message, None
     
     return f"File '{file_input.name}' processed. {len(df)} records loaded. Time granularity: {time_granularity}. Minimum token count: {min_tokens}.", df
