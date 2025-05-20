@@ -290,15 +290,9 @@ with gr.Blocks() as demo:
         status_message += f"\nUsing representation model: {rep_model}"
 
         try:
-            # Set up the representation model
-            representation_model_instance = None
-            if rep_model == "KeyBERTInspired":
-                representation_model_instance = KeyBERTInspired()
-            elif rep_model == "OpenAI":
-                representation_model_instance = OpenAI()
-            elif rep_model == "MaximalMarginalRelevance":
-                representation_model_instance = MaximalMarginalRelevance()
-
+            # Get the representation model using the classmethod
+            representation_model_instance = DynamicTopicModel.get_representation_model(rep_model)
+            
             # Create and train the dynamic topic model
             model = DynamicTopicModel(
                 num_topics=10,  # You could make this configurable

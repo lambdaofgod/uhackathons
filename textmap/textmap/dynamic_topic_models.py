@@ -2,12 +2,34 @@ import pandas as pd
 import numpy as np
 from typing import List, Dict, Any, Tuple, Optional, Union
 from bertopic import BERTopic
+from bertopic.representation import KeyBERTInspired, OpenAI, MaximalMarginalRelevance
 
 
 class DynamicTopicModel:
     """
     A wrapper for BERTopic that provides a scikit-learn-like API for dynamic topic modeling.
     """
+    
+    @classmethod
+    def get_representation_model(cls, model_name: str):
+        """
+        Get a representation model instance based on the model name.
+        
+        Args:
+            model_name: Name of the representation model to use.
+                        Options: "Default", "KeyBERTInspired", "OpenAI", "MaximalMarginalRelevance"
+                        
+        Returns:
+            A representation model instance or None for the default model.
+        """
+        if model_name == "KeyBERTInspired":
+            return KeyBERTInspired()
+        elif model_name == "OpenAI":
+            return OpenAI()
+        elif model_name == "MaximalMarginalRelevance":
+            return MaximalMarginalRelevance()
+        else:  # Default or any other value
+            return None
 
     def __init__(
         self,
@@ -16,6 +38,7 @@ class DynamicTopicModel:
         time_col: str = "creation_date",
         bertopic_model: Optional[BERTopic] = None,
         verbose: bool = True,
+        representation_model = None,
         **bertopic_kwargs,
     ):
         """
@@ -27,6 +50,7 @@ class DynamicTopicModel:
             time_col: The name of the column in the DataFrame indicating the timestamp.
             bertopic_model: An optional pre-trained instance of BERTopic.
             verbose: Whether to display progress information during model training.
+            representation_model: An optional representation model for BERTopic.
             **bertopic_kwargs: Additional keyword arguments to pass to BERTopic.
         """
         self.bertopic_model = bertopic_model
@@ -34,6 +58,7 @@ class DynamicTopicModel:
         self.time_col = time_col
         self.num_topics = num_topics
         self.verbose = verbose
+        self.representation_model = representation_model
         self.bertopic_kwargs = bertopic_kwargs
         self.topics_over_time = None
 
@@ -61,8 +86,11 @@ class DynamicTopicModel:
 
         # Initialize BERTopic model if not provided
         if self.bertopic_model is None:
+            kwargs = self.bertopic_kwargs.copy()
+            if self.representation_model is not None:
+                kwargs['representation_model'] = self.representation_model
             self.bertopic_model = BERTopic(
-                nr_topics=self.num_topics, verbose=self.verbose, **self.bertopic_kwargs
+                nr_topics=self.num_topics, verbose=self.verbose, **kwargs
             )
 
         print(
