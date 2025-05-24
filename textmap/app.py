@@ -4,23 +4,18 @@ import json
 import logging
 import traceback
 import sys
-import os
 
-# Set up logging with file output
-log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'logs')
-os.makedirs(log_dir, exist_ok=True)
-log_file = os.path.join(log_dir, 'textmap.log')
-
+# Simple logging setup
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(log_file),
+        logging.FileHandler("textmap.log"),
         logging.StreamHandler(sys.stdout)
     ]
 )
 logger = logging.getLogger(__name__)
-logger.info(f"Logging to: {log_file}")
+logger.info("Logging initialized")
 
 # Assuming app.py and data_loading.py are in the same directory 'textmap'
 # and you run the app from the parent directory of 'textmap' (e.g., python -m textmap.app)
@@ -475,7 +470,7 @@ with gr.Blocks() as demo:
             logging.error("Traceback: %s", traceback.format_exc())
             # Return error message to UI instead of raising
             return (
-                f"Error: {str(e)}\n\nCheck the log file for details: {log_file}",
+                f"Error: {str(e)}",
                 None,
                 None,
                 gr.update(visible=False),
