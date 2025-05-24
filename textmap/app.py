@@ -1,6 +1,11 @@
 import gradio as gr
 import pandas as pd
 import json
+import logging
+
+# Set up logging
+from textmap.logging_setup import setup_logging
+logger = setup_logging()
 
 # Assuming app.py and data_loading.py are in the same directory 'textmap'
 # and you run the app from the parent directory of 'textmap' (e.g., python -m textmap.app)
@@ -278,10 +283,15 @@ with gr.Blocks() as demo:
     def train_and_display_topics(
         file_input, granularity, text_col, title_col, date_col, min_tokens, rep_model
     ):
+        logger.debug("train_and_display_topics called with params: %s, %s, %s, %s, %s, %s", 
+                    file_input.name if file_input else None, granularity, text_col, 
+                    title_col, date_col, rep_model)
+        
         # Handle the case where date_col is "None"
         actual_date_col = None if date_col == "None" else date_col
         
         # First load and preprocess the data
+        logger.debug("Calling load_and_preprocess_data")
         status_message, df = load_and_preprocess_data(
             file_input,
             granularity,
@@ -290,6 +300,8 @@ with gr.Blocks() as demo:
             actual_date_col,
             min_tokens=min_tokens,
         )
+        logger.debug("load_and_preprocess_data returned: %s, df is %s", 
+                    status_message, "None" if df is None else f"shape {df.shape}")
 
         if df is None:
             return (
@@ -313,13 +325,11 @@ with gr.Blocks() as demo:
 
         try:
             # Get the representation model using the classmethod
+            logger.debug("Setting up topic modeler with model: %s", rep_model)
             topic_modeler = BERTopicUtils.setup_topic_modeler(
                 representation_model_name=rep_model
             )
-
-            # Debug the first few rows to verify data
-            print("\nFirst 3 rows of DataFrame:")
-            print(df.head(3))
+            logger.debug("Topic modeler setup complete")
 
             # Check if required columns exist
             if "text" not in df.columns:
@@ -329,6 +339,7 @@ with gr.Blocks() as demo:
             
             # Create and train the dynamic topic model
             has_time_data = "date" in df.columns
+            logger.debug("Creating DynamicTopicModel (has_time_data=%s)", has_time_data)
             
             model = DynamicTopicModel(
                 num_topics=10,  # You could make this configurable
@@ -336,23 +347,33 @@ with gr.Blocks() as demo:
                 time_col="date" if has_time_data else None,  # Use date column if available
                 bertopic_model=topic_modeler,
             )
+            logger.debug("DynamicTopicModel created")
 
             # Train the model with 20 time bins if time data is available
+            logger.debug("Starting model.fit() with df shape: %s", df.shape)
             if has_time_data:
+                logger.debug("Fitting with time data (nr_bins=20)")
                 model.fit(df, nr_bins=20)
             else:
+                logger.debug("Fitting without time data")
                 model.fit(df)
+            logger.debug("Model fitting complete")
 
             # Get topics information
+            logger.debug("Getting topics information")
             topics_df = model.get_topics(top_n_topics=10)
+            logger.debug("Got topics dataframe with shape: %s", topics_df.shape)
 
             # Create the topics over time visualization if time data is available
             has_time_data = "date" in df.columns
             
             if has_time_data:
+                logger.debug("Creating topics over time visualization")
                 topics_over_time_fig = model.visualize_topics_over_time(top_n_topics=10)
+                logger.debug("Topics over time visualization created")
                 time_plot_update = gr.update(visible=True, value=topics_over_time_fig)
             else:
+                logger.debug("Skipping time-based visualization (no date column)")
                 time_plot_update = gr.update(visible=False)
                 status_message += "\nNo date column available - skipping time-based visualization."
 
@@ -367,6 +388,8 @@ with gr.Blocks() as demo:
             import traceback
 
             error_trace = traceback.format_exc()
+            logger.error("Exception in train_and_display_topics: %s", str(e))
+            logger.error("Traceback: %s", error_trace)
             return (
                 f"{status_message}\nError training topic model: {str(e)}\n{error_trace}",
                 df,
@@ -375,8 +398,21 @@ with gr.Blocks() as demo:
                 gr.update(visible=False),
             )
 
+    def on_submit_click(*args):
+        logger.debug("Submit button clicked")
+        try:
+            result = train_and_display_topics(*args)
+            logger.debug("train_and_display_topics completed successfully")
+            return result
+        except Exception as e:
+            logger.error("Unhandled exception in submit handler: %s", str(e))
+            import traceback
+            logger.error("Traceback: %s", traceback.format_exc())
+            # Re-raise to let Gradio handle it
+            raise
+
     submit_button.click(
-        fn=train_and_display_topics,
+        fn=on_submit_click,
         inputs=[
             file_input,
             granularity_input,
