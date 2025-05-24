@@ -1,5 +1,8 @@
 import pandas as pd
 import tiktoken
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _validate_inputs(file_input, text_column, title_column, date_column):
@@ -92,20 +95,28 @@ def _standardize_dataframe(df, text_column, title_column, date_column):
     """
     try:
         # Create a standardized DataFrame with the expected column names
-        standardized_df = pd.DataFrame(
-            {
-                "text": df[text_column],
-                "title": df[title_column],
-                "date": pd.to_datetime(df[date_column]),
-            }
-        )
-
+        data = {
+            "text": df[text_column],
+            "title": df[title_column],
+        }
+        
+        # Only add date if date_column is provided
+        if date_column is not None:
+            try:
+                logger.info(f"Converting date column: {date_column}")
+                data["date"] = pd.to_datetime(df[date_column])
+                logger.info(f"Date conversion successful")
+            except Exception as e:
+                error_msg = f"Error parsing 'date' column: {e}. Ensure dates are in a recognizable format."
+                logger.info(error_msg)
+                return None, error_msg
+        
+        standardized_df = pd.DataFrame(data)
         return standardized_df, None
     except Exception as e:
-        return (
-            None,
-            f"Error parsing 'date' column: {e}. Ensure dates are in a recognizable format.",
-        )
+        error_msg = f"Error standardizing dataframe: {e}"
+        logger.info(error_msg)
+        return None, error_msg
 
 
 def _filter_by_token_count(df, min_tokens):
@@ -196,37 +207,60 @@ def load_and_preprocess_data(
             - status_message (str): A message indicating the outcome.
             - df (pd.DataFrame or None): The processed DataFrame, or None if an error occurred.
     """
+    logger.info(f"Starting data preprocessing: file={file_input.name}, columns={text_column},{title_column},{date_column}")
+    
     # Validate inputs
     error_message = _validate_inputs(file_input, text_column, title_column, date_column)
     if error_message:
+        logger.info(f"Input validation failed: {error_message}")
         return error_message, None
 
     # Load dataframe
+    logger.info(f"Loading dataframe from {file_input.name}")
     df, error_message = _load_dataframe(file_input)
     if error_message:
+        logger.info(f"Failed to load dataframe: {error_message}")
         return error_message, None
+    logger.info(f"Dataframe loaded with shape: {df.shape}")
 
     # Check required columns
-    required_columns = [text_column, title_column, date_column]
+    required_columns = [text_column, title_column]
+    if date_column is not None:
+        required_columns.append(date_column)
+    
+    logger.info(f"Checking for required columns: {required_columns}")
     is_valid, error_message = _check_required_columns(df, required_columns)
     if not is_valid:
+        logger.info(f"Required columns check failed: {error_message}")
         return error_message, None
 
     # Standardize dataframe
+    logger.info("Standardizing dataframe")
     df, error_message = _standardize_dataframe(
         df, text_column, title_column, date_column
     )
     if error_message:
+        logger.info(f"Failed to standardize dataframe: {error_message}")
         return error_message, None
+    logger.info(f"Dataframe standardized with shape: {df.shape}")
 
     # Filter by token count
+    logger.info(f"Filtering by token count (min_tokens={min_tokens})")
     df, filtered_count = _filter_by_token_count(df, min_tokens)
+    logger.info(f"After filtering: {len(df)} rows remain, {filtered_count} filtered out")
 
     # Assign time periods
-    df, error_message = _assign_time_periods(df, time_granularity)
-    if error_message:
-        return error_message, None
+    if date_column is not None:
+        logger.info(f"Assigning time periods with granularity: {time_granularity}")
+        df, error_message = _assign_time_periods(df, time_granularity)
+        if error_message:
+            logger.info(f"Failed to assign time periods: {error_message}")
+            return error_message, None
+        logger.info("Time periods assigned successfully")
+    else:
+        logger.info("Skipping time period assignment (no date column)")
 
+    logger.info(f"Data preprocessing complete: {len(df)} records ready for analysis")
     return (
         f"File '{file_input.name}' processed. {len(df)} records loaded. Time granularity: {time_granularity}. Minimum token count: {min_tokens}.",
         df,

@@ -2,9 +2,25 @@ import gradio as gr
 import pandas as pd
 import json
 import logging
+import traceback
+import sys
+import os
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+# Set up logging with file output
+log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'logs')
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, 'textmap.log')
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
+logger.info(f"Logging to: {log_file}")
 
 # Assuming app.py and data_loading.py are in the same directory 'textmap'
 # and you run the app from the parent directory of 'textmap' (e.g., python -m textmap.app)
@@ -333,11 +349,16 @@ with gr.Blocks() as demo:
 
         try:
             # Get the representation model using the classmethod
-            logging.debug("Setting up topic modeler with model: %s", rep_model)
-            topic_modeler = BERTopicUtils.setup_topic_modeler(
-                representation_model_name=rep_model
-            )
-            logging.debug("Topic modeler setup complete")
+            logging.info("Setting up topic modeler with model: %s", rep_model)
+            try:
+                topic_modeler = BERTopicUtils.setup_topic_modeler(
+                    representation_model_name=rep_model
+                )
+                logging.info("Topic modeler setup complete")
+            except Exception as e:
+                logging.error("Failed to set up topic modeler: %s", str(e))
+                logging.error(traceback.format_exc())
+                raise
 
             # Check if required columns exist
             if "text" not in df.columns:
@@ -347,50 +368,72 @@ with gr.Blocks() as demo:
 
             # Create and train the dynamic topic model
             has_time_data = "date" in df.columns
-            logging.debug(
+            logging.info(
                 "Creating DynamicTopicModel (has_time_data=%s)", has_time_data
             )
 
-            model = DynamicTopicModel(
-                num_topics=10,  # You could make this configurable
-                text_col="text",  # Use the standardized text column
-                time_col=(
-                    "date" if has_time_data else None
-                ),  # Use date column if available
-                bertopic_model=topic_modeler,
-            )
-            logging.debug("DynamicTopicModel created")
+            try:
+                model = DynamicTopicModel(
+                    num_topics=10,  # You could make this configurable
+                    text_col="text",  # Use the standardized text column
+                    time_col=(
+                        "date" if has_time_data else None
+                    ),  # Use date column if available
+                    bertopic_model=topic_modeler,
+                )
+                logging.info("DynamicTopicModel created successfully")
+            except Exception as e:
+                logging.error("Failed to create DynamicTopicModel: %s", str(e))
+                logging.error(traceback.format_exc())
+                raise
 
             # Train the model with 20 time bins if time data is available
-            logging.debug("Starting model.fit() with df shape: %s", df.shape)
-            if has_time_data:
-                logging.debug("Fitting with time data (nr_bins=20)")
-                model.fit(df, nr_bins=20)
-            else:
-                logging.debug("Fitting without time data")
-                model.fit(df)
-            logging.debug("Model fitting complete")
+            logging.info("Starting model.fit() with df shape: %s", df.shape)
+            try:
+                if has_time_data:
+                    logging.info("Fitting with time data (nr_bins=20)")
+                    model.fit(df, nr_bins=20)
+                else:
+                    logging.info("Fitting without time data")
+                    model.fit(df)
+                logging.info("Model fitting complete")
+            except Exception as e:
+                logging.error("Error during model fitting: %s", str(e))
+                logging.error(traceback.format_exc())
+                raise
 
             # Get topics information
-            logging.debug("Getting topics information")
-            topics_df = model.get_topics(top_n_topics=10)
-            logging.debug("Got topics dataframe with shape: %s", topics_df.shape)
+            logging.info("Getting topics information")
+            try:
+                topics_df = model.get_topics(top_n_topics=10)
+                logging.info("Got topics dataframe with shape: %s", topics_df.shape)
+            except Exception as e:
+                logging.error("Error getting topics: %s", str(e))
+                logging.error(traceback.format_exc())
+                raise
 
             # Create the topics over time visualization if time data is available
             has_time_data = "date" in df.columns
-
+            
             if has_time_data:
-                logging.debug("Creating topics over time visualization")
-                topics_over_time_fig = model.visualize_topics_over_time(top_n_topics=10)
-                logging.debug("Topics over time visualization created")
-                time_plot_update = gr.update(visible=True, value=topics_over_time_fig)
+                logging.info("Creating topics over time visualization")
+                try:
+                    topics_over_time_fig = model.visualize_topics_over_time(top_n_topics=10)
+                    logging.info("Topics over time visualization created")
+                    time_plot_update = gr.update(visible=True, value=topics_over_time_fig)
+                except Exception as e:
+                    logging.error("Error creating time visualization: %s", str(e))
+                    logging.error(traceback.format_exc())
+                    time_plot_update = gr.update(visible=False)
+                    status_message += f"\nError creating time visualization: {str(e)}"
             else:
-                logging.debug("Skipping time-based visualization (no date column)")
+                logging.info("Skipping time-based visualization (no date column)")
                 time_plot_update = gr.update(visible=False)
                 status_message += (
                     "\nNo date column available - skipping time-based visualization."
                 )
 
+            logging.info("Returning results to UI")
             return (
                 f"{status_message}\nSuccessfully trained topic model with BERTopic.",
                 df,
@@ -413,18 +456,23 @@ with gr.Blocks() as demo:
             )
 
     def on_submit_click(*args):
-        logging.debug("Submit button clicked")
+        logging.info("Submit button clicked")
         try:
+            logging.info("Calling train_and_display_topics")
             result = train_and_display_topics(*args)
-            logging.debug("train_and_display_topics completed successfully")
+            logging.info("train_and_display_topics completed successfully")
             return result
         except Exception as e:
             logging.error("Unhandled exception in submit handler: %s", str(e))
-            import traceback
-
             logging.error("Traceback: %s", traceback.format_exc())
-            # Re-raise to let Gradio handle it
-            raise
+            # Return error message to UI instead of raising
+            return (
+                f"Error: {str(e)}\n\nCheck the log file for details: {log_file}",
+                None,
+                None,
+                gr.update(visible=False),
+                gr.update(visible=False),
+            )
 
     submit_button.click(
         fn=on_submit_click,
