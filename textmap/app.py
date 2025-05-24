@@ -99,7 +99,10 @@ with gr.Blocks() as demo:
                     label="Title Column", choices=[], interactive=True
                 )
                 date_column = gr.Dropdown(
-                    label="Date Column", choices=[], interactive=True
+                    label="Date Column", 
+                    choices=[], 
+                    interactive=True,
+                    info="Select 'None' to skip time-based visualization"
                 )
 
                 granularity_input = gr.Radio(
@@ -231,6 +234,9 @@ with gr.Blocks() as demo:
                     if candidate in columns:
                         default_date = candidate
                         break
+            
+                # Add None as an option for date column
+                columns = ["None"] + columns
 
             return {
                 text_column: gr.update(choices=columns, value=default_text),
@@ -271,13 +277,16 @@ with gr.Blocks() as demo:
     def train_and_display_topics(
         file_input, granularity, text_col, title_col, date_col, min_tokens, rep_model
     ):
+        # Handle the case where date_col is "None"
+        actual_date_col = None if date_col == "None" else date_col
+        
         # First load and preprocess the data
         status_message, df = load_and_preprocess_data(
             file_input,
             granularity,
             text_col,
             title_col,
-            date_col,
+            actual_date_col,
             min_tokens=min_tokens,
         )
 
@@ -307,14 +316,6 @@ with gr.Blocks() as demo:
                 representation_model_name=rep_model
             )
 
-            # Create and train the dynamic topic model
-            model = DynamicTopicModel(
-                num_topics=10,  # You could make this configurable
-                text_col="text",  # Use the standardized text column
-                time_col="date",  # Use the standardized date column from data_loading
-                bertopic_model=topic_modeler,
-            )
-
             # Debug the first few rows to verify data
             print("\nFirst 3 rows of DataFrame:")
             print(df.head(3))
@@ -324,26 +325,42 @@ with gr.Blocks() as demo:
                 raise ValueError(
                     f"Text column 'text' not found in DataFrame. Available columns: {list(df.columns)}"
                 )
-            if "date" not in df.columns:
-                raise ValueError(
-                    f"Date column 'date' not found in DataFrame. Available columns: {list(df.columns)}"
-                )
+            
+            # Create and train the dynamic topic model
+            has_time_data = "date" in df.columns
+            
+            model = DynamicTopicModel(
+                num_topics=10,  # You could make this configurable
+                text_col="text",  # Use the standardized text column
+                time_col="date" if has_time_data else None,  # Use date column if available
+                bertopic_model=topic_modeler,
+            )
 
-            # Train the model with 20 time bins
-            model.fit(df, nr_bins=20)
+            # Train the model with 20 time bins if time data is available
+            if has_time_data:
+                model.fit(df, nr_bins=20)
+            else:
+                model.fit(df)
 
             # Get topics information
             topics_df = model.get_topics(top_n_topics=10)
 
-            # Create the topics over time visualization
-            topics_over_time_fig = model.visualize_topics_over_time(top_n_topics=10)
+            # Create the topics over time visualization if time data is available
+            has_time_data = "date" in df.columns
+            
+            if has_time_data:
+                topics_over_time_fig = model.visualize_topics_over_time(top_n_topics=10)
+                time_plot_update = gr.update(visible=True, value=topics_over_time_fig)
+            else:
+                time_plot_update = gr.update(visible=False)
+                status_message += "\nNo date column available - skipping time-based visualization."
 
             return (
                 f"{status_message}\nSuccessfully trained topic model with BERTopic.",
                 df,
                 model,
                 gr.update(visible=True, value=topics_df),
-                gr.update(visible=True, value=topics_over_time_fig),
+                time_plot_update,
             )
         except Exception as e:
             import traceback
