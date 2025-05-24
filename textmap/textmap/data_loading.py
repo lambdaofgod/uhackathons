@@ -84,6 +84,7 @@ def _check_required_columns(df, required_columns):
 def _standardize_dataframe(df, text_column, title_column, date_column):
     """
     Standardizes the dataframe by renaming columns and converting date.
+    Drops rows where either text or title is NA.
 
     Args:
         df (pd.DataFrame): The dataframe to standardize.
@@ -115,6 +116,15 @@ def _standardize_dataframe(df, text_column, title_column, date_column):
                 return None, error_msg
 
         standardized_df = pd.DataFrame(data)
+        
+        # Drop rows where either text or title is NA
+        original_count = len(standardized_df)
+        standardized_df = standardized_df.dropna(subset=['text', 'title'])
+        dropped_count = original_count - len(standardized_df)
+        
+        if dropped_count > 0:
+            logger.info(f"Dropped {dropped_count} rows with NA values in text or title columns")
+        
         return standardized_df, None
     except Exception as e:
         error_msg = f"Error standardizing dataframe: {e}"
