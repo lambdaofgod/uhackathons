@@ -11,33 +11,21 @@ class DynamicTopicModel:
 
     def __init__(
         self,
-        num_topics: Optional[int] = None,
+        bertopic_model: BERTopic,
         text_col: str = "text",
         time_col: str = "creation_date",
-        bertopic_model: Optional[BERTopic] = None,
-        verbose: bool = True,
-        representation_model=None,
-        **bertopic_kwargs,
     ):
         """
         Initializes the DynamicTopicModel using BERTopic.
 
         Args:
-            num_topics: Number of topics to extract. If None, BERTopic will determine automatically.
+            bertopic_model: A pre-trained instance of BERTopic.
             text_col: The name of the column in the DataFrame containing the text data.
             time_col: The name of the column in the DataFrame indicating the timestamp.
-            bertopic_model: An optional pre-trained instance of BERTopic.
-            verbose: Whether to display progress information during model training.
-            representation_model: An optional representation model for BERTopic.
-            **bertopic_kwargs: Additional keyword arguments to pass to BERTopic.
         """
         self.bertopic_model = bertopic_model
         self.text_col = text_col
         self.time_col = time_col
-        self.num_topics = num_topics
-        self.verbose = verbose
-        self.representation_model = representation_model
-        self.bertopic_kwargs = bertopic_kwargs
         self.topics_over_time = None
 
     def fit(self, df: pd.DataFrame, nr_bins: int = 20):
@@ -68,14 +56,6 @@ class DynamicTopicModel:
                 f"Time column '{self.time_col}' not found in DataFrame. Available columns: {list(df.columns)}"
             )
 
-        # Initialize BERTopic model if not provided
-        if self.bertopic_model is None:
-            kwargs = self.bertopic_kwargs.copy()
-            if self.representation_model is not None:
-                kwargs["representation_model"] = self.representation_model
-            self.bertopic_model = BERTopic(
-                nr_topics=self.num_topics, verbose=self.verbose, **kwargs
-            )
         try:
             # Extract text and timestamps
             texts = df[self.text_col].tolist()
@@ -115,10 +95,6 @@ class DynamicTopicModel:
             - topics is a list of the most likely topic for each document
             - probabilities is a list of probability distributions over all topics for each document
         """
-        if self.bertopic_model is None:
-            raise RuntimeError(
-                "The BERTopic model is not initialized. Call fit() first or provide a model."
-            )
         if self.text_col not in df.columns:
             raise ValueError(f"Text column '{self.text_col}' not found in DataFrame.")
 
@@ -143,10 +119,6 @@ class DynamicTopicModel:
         Returns:
             DataFrame with topic information.
         """
-        if self.bertopic_model is None:
-            raise RuntimeError(
-                "The BERTopic model is not initialized. Call fit() first or provide a model."
-            )
 
         try:
             # Get topic information from BERTopic
@@ -184,10 +156,6 @@ class DynamicTopicModel:
         Returns:
             A visualization of the topics.
         """
-        if self.bertopic_model is None:
-            raise RuntimeError(
-                "The BERTopic model is not initialized. Call fit() first or provide a model."
-            )
 
         return self.bertopic_model.visualize_topics(**kwargs)
 
@@ -202,9 +170,9 @@ class DynamicTopicModel:
         Returns:
             A visualization of the topics over time.
         """
-        if self.bertopic_model is None or self.topics_over_time is None:
+        if self.topics_over_time is None:
             raise RuntimeError(
-                "The BERTopic model or topics over time not initialized. Call fit() first."
+                "Topics over time not initialized. Call fit() first."
             )
 
         return self.bertopic_model.visualize_topics_over_time(

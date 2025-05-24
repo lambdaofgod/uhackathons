@@ -8,11 +8,8 @@ import sys
 # Simple logging setup
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("textmap.log"),
-        logging.StreamHandler(sys.stdout)
-    ]
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("textmap.log"), logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
 logger.info("Logging initialized")
@@ -160,6 +157,7 @@ with gr.Blocks() as demo:
             )
 
             # Add a plotly figure for topics over time visualization
+            topics_plot = gr.Plot(label="Topics", visible=False)
             topics_over_time_plot = gr.Plot(label="Topics Over Time", visible=False)
 
     # Connect preview button to load file preview
@@ -360,23 +358,20 @@ with gr.Blocks() as demo:
 
             # Create and train the dynamic topic model
             has_time_data = "date" in df.columns
-            logging.info(
-                "Creating DynamicTopicModel (has_time_data=%s)", has_time_data
-            )
+            logging.info("Creating DynamicTopicModel (has_time_data=%s)", has_time_data)
             logging.info(f"DataFrame columns: {df.columns.tolist()}")
             logging.info(f"DataFrame shape: {df.shape}")
-            
+
             # Log a sample of the data to verify content
             if len(df) > 0:
                 sample_row = df.iloc[0]
                 logging.info(f"Sample text: {sample_row.get('text', '')[:100]}...")
                 logging.info(f"Sample title: {sample_row.get('title', '')}")
-                if 'date' in df.columns:
+                if "date" in df.columns:
                     logging.info(f"Sample date: {sample_row.get('date')}")
 
             try:
                 model = DynamicTopicModel(
-                    num_topics=10,  # You could make this configurable
                     text_col="text",  # Use the standardized text column
                     time_col=(
                         "date" if has_time_data else None
@@ -416,14 +411,22 @@ with gr.Blocks() as demo:
 
             # Create the topics over time visualization if time data is available
             has_time_data = "date" in df.columns
-            
+
+            topics_plot_update = gr.update(
+                visible=True, value=model.bertopic_model.visualize_topics()
+            )
+
             logging.info(f"Checking for time data: has_time_data={has_time_data}")
             if has_time_data:
                 logging.info("Creating topics over time visualization")
                 try:
-                    topics_over_time_fig = model.visualize_topics_over_time(top_n_topics=10)
+                    topics_over_time_fig = model.visualize_topics_over_time(
+                        top_n_topics=10
+                    )
                     logging.info("Topics over time visualization created")
-                    time_plot_update = gr.update(visible=True, value=topics_over_time_fig)
+                    time_plot_update = gr.update(
+                        visible=True, value=topics_over_time_fig
+                    )
                 except Exception as e:
                     logging.error("Error creating time visualization: %s", str(e))
                     logging.error(traceback.format_exc())
@@ -442,6 +445,7 @@ with gr.Blocks() as demo:
                 df,
                 model,
                 gr.update(visible=True, value=topics_df),
+                topics_plot_update,
                 time_plot_update,
             )
         except Exception as e:
@@ -475,6 +479,7 @@ with gr.Blocks() as demo:
                 None,
                 gr.update(visible=False),
                 gr.update(visible=False),
+                gr.update(visible=False),
             )
 
     submit_button.click(
@@ -493,6 +498,7 @@ with gr.Blocks() as demo:
             df_state,
             model_state,
             topics_table,
+            topics_plot,
             topics_over_time_plot,
         ],
     )
