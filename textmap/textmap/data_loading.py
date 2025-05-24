@@ -22,9 +22,11 @@ def _validate_inputs(file_input, text_column, title_column, date_column):
     if file_input is None:
         return "Please upload a file and select time granularity."
 
-    if not all([text_column, title_column, date_column]):
-        return "Please select columns for text, title, and date."
+    # Only text and title columns are required
+    if not text_column or not title_column:
+        return "Please select columns for text and title."
 
+    # date_column can be None or "None"
     return None
 
 
@@ -209,8 +211,12 @@ def load_and_preprocess_data(
     """
     logger.info(f"Starting data preprocessing: file={file_input.name}, columns={text_column},{title_column},{date_column}")
     
+    # Handle the case where date_column is "None"
+    actual_date_column = None if date_column == "None" else date_column
+    logger.info(f"Using actual_date_column: {actual_date_column}")
+    
     # Validate inputs
-    error_message = _validate_inputs(file_input, text_column, title_column, date_column)
+    error_message = _validate_inputs(file_input, text_column, title_column, actual_date_column)
     if error_message:
         logger.info(f"Input validation failed: {error_message}")
         return error_message, None
@@ -225,8 +231,8 @@ def load_and_preprocess_data(
 
     # Check required columns
     required_columns = [text_column, title_column]
-    if date_column is not None:
-        required_columns.append(date_column)
+    if actual_date_column is not None:
+        required_columns.append(actual_date_column)
     
     logger.info(f"Checking for required columns: {required_columns}")
     is_valid, error_message = _check_required_columns(df, required_columns)
@@ -237,7 +243,7 @@ def load_and_preprocess_data(
     # Standardize dataframe
     logger.info("Standardizing dataframe")
     df, error_message = _standardize_dataframe(
-        df, text_column, title_column, date_column
+        df, text_column, title_column, actual_date_column
     )
     if error_message:
         logger.info(f"Failed to standardize dataframe: {error_message}")
@@ -250,7 +256,7 @@ def load_and_preprocess_data(
     logger.info(f"After filtering: {len(df)} rows remain, {filtered_count} filtered out")
 
     # Assign time periods
-    if date_column is not None:
+    if actual_date_column is not None and "date" in df.columns:
         logger.info(f"Assigning time periods with granularity: {time_granularity}")
         df, error_message = _assign_time_periods(df, time_granularity)
         if error_message:

@@ -308,9 +308,6 @@ with gr.Blocks() as demo:
             rep_model,
         )
 
-        # Handle the case where date_col is "None"
-        actual_date_col = None if date_col == "None" else date_col
-
         # First load and preprocess the data
         logging.info("Calling load_and_preprocess_data")
         status_message, df = load_and_preprocess_data(
@@ -318,10 +315,10 @@ with gr.Blocks() as demo:
             granularity,
             text_col,
             title_col,
-            actual_date_col,
+            date_col,  # Pass the original date_col, handling is done in load_and_preprocess_data
             min_tokens=min_tokens,
         )
-        logging.debug(
+        logging.info(
             "load_and_preprocess_data returned: %s, df is %s",
             status_message,
             "None" if df is None else f"shape {df.shape}",
@@ -371,6 +368,16 @@ with gr.Blocks() as demo:
             logging.info(
                 "Creating DynamicTopicModel (has_time_data=%s)", has_time_data
             )
+            logging.info(f"DataFrame columns: {df.columns.tolist()}")
+            logging.info(f"DataFrame shape: {df.shape}")
+            
+            # Log a sample of the data to verify content
+            if len(df) > 0:
+                sample_row = df.iloc[0]
+                logging.info(f"Sample text: {sample_row.get('text', '')[:100]}...")
+                logging.info(f"Sample title: {sample_row.get('title', '')}")
+                if 'date' in df.columns:
+                    logging.info(f"Sample date: {sample_row.get('date')}")
 
             try:
                 model = DynamicTopicModel(
@@ -415,6 +422,7 @@ with gr.Blocks() as demo:
             # Create the topics over time visualization if time data is available
             has_time_data = "date" in df.columns
             
+            logging.info(f"Checking for time data: has_time_data={has_time_data}")
             if has_time_data:
                 logging.info("Creating topics over time visualization")
                 try:
