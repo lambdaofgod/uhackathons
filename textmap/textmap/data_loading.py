@@ -102,7 +102,7 @@ def _standardize_dataframe(df, text_column, title_column, date_column):
             "text": df[text_column],
             "title": df[title_column],
         }
-        
+
         # Only add date if date_column is provided
         if date_column is not None:
             try:
@@ -113,7 +113,7 @@ def _standardize_dataframe(df, text_column, title_column, date_column):
                 error_msg = f"Error parsing 'date' column: {e}. Ensure dates are in a recognizable format."
                 logger.info(error_msg)
                 return None, error_msg
-        
+
         standardized_df = pd.DataFrame(data)
         return standardized_df, None
     except Exception as e:
@@ -210,14 +210,18 @@ def load_and_preprocess_data(
             - status_message (str): A message indicating the outcome.
             - df (pd.DataFrame or None): The processed DataFrame, or None if an error occurred.
     """
-    logger.info(f"Starting data preprocessing: file={file_input.name}, columns={text_column},{title_column},{date_column}")
-    
+    logger.info(
+        f"Starting data preprocessing: file={file_input.name}, columns={text_column},{title_column},{date_column}"
+    )
+
     # Handle the case where date_column is "None"
     actual_date_column = None if date_column == "None" else date_column
     logger.info(f"Using actual_date_column: {actual_date_column}")
-    
+
     # Validate inputs
-    error_message = _validate_inputs(file_input, text_column, title_column, actual_date_column)
+    error_message = _validate_inputs(
+        file_input, text_column, title_column, actual_date_column
+    )
     if error_message:
         logger.info(f"Input validation failed: {error_message}")
         return error_message, None
@@ -234,7 +238,7 @@ def load_and_preprocess_data(
     required_columns = [text_column, title_column]
     if actual_date_column is not None:
         required_columns.append(actual_date_column)
-    
+
     logger.info(f"Checking for required columns: {required_columns}")
     is_valid, error_message = _check_required_columns(df, required_columns)
     if not is_valid:
@@ -254,7 +258,9 @@ def load_and_preprocess_data(
     # Filter by token count
     logger.info(f"Filtering by token count (min_tokens={min_tokens})")
     df, filtered_count = _filter_by_token_count(df, min_tokens)
-    logger.info(f"After filtering: {len(df)} rows remain, {filtered_count} filtered out")
+    logger.info(
+        f"After filtering: {len(df)} rows remain, {filtered_count} filtered out"
+    )
 
     # Assign time periods
     if actual_date_column is not None and "date" in df.columns:
