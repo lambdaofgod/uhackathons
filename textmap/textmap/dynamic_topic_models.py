@@ -11,27 +11,21 @@ class DynamicTopicModel:
 
     def __init__(
         self,
-        num_topics: Optional[int] = None,
+        bertopic_model: BERTopic,
         text_col: str = "text",
         time_col: str = "creation_date",
-        verbose: bool = True,
-        **bertopic_kwargs,
     ):
         """
         Initializes the DynamicTopicModel using BERTopic.
 
         Args:
-            num_topics: Number of topics to extract. If None, BERTopic will determine automatically.
+            bertopic_model: A pre-trained instance of BERTopic.
             text_col: The name of the column in the DataFrame containing the text data.
             time_col: The name of the column in the DataFrame indicating the timestamp.
-            verbose: Whether to display progress information during model training.
-            **bertopic_kwargs: Additional keyword arguments to pass to BERTopic.
         """
-        self.bertopic_model = BERTopic(nr_topics=num_topics, verbose=verbose, **bertopic_kwargs)
+        self.bertopic_model = bertopic_model
         self.text_col = text_col
         self.time_col = time_col
-        self.num_topics = num_topics
-        self.verbose = verbose
         self.topics_over_time = None
 
     def fit(self, df: pd.DataFrame, nr_bins: int = 20):
