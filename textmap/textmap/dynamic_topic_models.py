@@ -2,34 +2,12 @@ import pandas as pd
 import numpy as np
 from typing import List, Dict, Any, Tuple, Optional, Union
 from bertopic import BERTopic
-from bertopic.representation import KeyBERTInspired, OpenAI, MaximalMarginalRelevance
 
 
 class DynamicTopicModel:
     """
     A wrapper for BERTopic that provides a scikit-learn-like API for dynamic topic modeling.
     """
-    
-    @classmethod
-    def get_representation_model(cls, model_name: str):
-        """
-        Get a representation model instance based on the model name.
-        
-        Args:
-            model_name: Name of the representation model to use.
-                        Options: "Default", "KeyBERTInspired", "OpenAI", "MaximalMarginalRelevance"
-                        
-        Returns:
-            A representation model instance or None for the default model.
-        """
-        if model_name == "KeyBERTInspired":
-            return KeyBERTInspired()
-        elif model_name == "OpenAI":
-            return OpenAI()
-        elif model_name == "MaximalMarginalRelevance":
-            return MaximalMarginalRelevance()
-        else:  # Default or any other value
-            return None
 
     def __init__(
         self,
@@ -38,7 +16,7 @@ class DynamicTopicModel:
         time_col: str = "creation_date",
         bertopic_model: Optional[BERTopic] = None,
         verbose: bool = True,
-        representation_model = None,
+        representation_model=None,
         **bertopic_kwargs,
     ):
         """
@@ -76,48 +54,46 @@ class DynamicTopicModel:
         # Debug information
         print(f"DataFrame shape: {df.shape}")
         print(f"DataFrame columns: {list(df.columns)}")
-        print(f"Looking for text column: '{self.text_col}' and time column: '{self.time_col}'")
-        
+        print(
+            f"Looking for text column: '{self.text_col}' and time column: '{self.time_col}'"
+        )
+
         # Check if columns exist
         if self.text_col not in df.columns:
-            raise ValueError(f"Text column '{self.text_col}' not found in DataFrame. Available columns: {list(df.columns)}")
-        if self.time_col not in df.columns:
-            raise ValueError(f"Time column '{self.time_col}' not found in DataFrame. Available columns: {list(df.columns)}")
+            raise ValueError(
+                f"Text column '{self.text_col}' not found in DataFrame. Available columns: {list(df.columns)}"
+            )
+        if self.time_col not in df.columns and not self.time_col is None:
+            raise ValueError(
+                f"Time column '{self.time_col}' not found in DataFrame. Available columns: {list(df.columns)}"
+            )
 
         # Initialize BERTopic model if not provided
         if self.bertopic_model is None:
             kwargs = self.bertopic_kwargs.copy()
             if self.representation_model is not None:
-                kwargs['representation_model'] = self.representation_model
+                kwargs["representation_model"] = self.representation_model
             self.bertopic_model = BERTopic(
                 nr_topics=self.num_topics, verbose=self.verbose, **kwargs
             )
-
-        print(
-            f"Model configured with text_col='{self.text_col}', time_col='{self.time_col}'."
-        )
-        
-        # Print sample data to verify content
-        print("\nSample data from DataFrame:")
-        print(f"First 3 rows of text column: {df[self.text_col].head(3).tolist()}")
-        print(f"First 3 rows of time column: {df[self.time_col].head(3).tolist()}")
-
         try:
             # Extract text and timestamps
             texts = df[self.text_col].tolist()
-            timestamps = df[self.time_col].tolist()
 
             # Fit the BERTopic model
             print("Training BERTopic model...")
             topics, probs = self.bertopic_model.fit_transform(texts)
             print("BERTopic model training complete.")
 
-            # Generate topics over time
-            print(f"Generating topics over time with {nr_bins} bins...")
-            self.topics_over_time = self.bertopic_model.topics_over_time(
-                texts, timestamps, nr_bins=nr_bins
-            )
-            print("Topics over time generation complete.")
+            if self.time_col is not None:
+
+                timestamps = df[self.time_col].tolist()
+                # Generate topics over time
+                print(f"Generating topics over time with {nr_bins} bins...")
+                self.topics_over_time = self.bertopic_model.topics_over_time(
+                    texts, timestamps, nr_bins=nr_bins
+                )
+                print("Topics over time generation complete.")
 
         except Exception as e:
             import traceback
