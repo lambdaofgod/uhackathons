@@ -110,7 +110,7 @@ with gr.Blocks() as demo:
 
                 min_tokens_input = gr.Number(
                     label="Minimum Token Count",
-                    value=64,
+                    value=15,
                     precision=0,
                     info="Minimum number of tokens required for a text to be included in the analysis",
                 )
@@ -273,7 +273,12 @@ with gr.Blocks() as demo:
     ):
         # First load and preprocess the data
         status_message, df = load_and_preprocess_data(
-            file_input, granularity, text_col, title_col, date_col, min_tokens=min_tokens
+            file_input,
+            granularity,
+            text_col,
+            title_col,
+            date_col,
+            min_tokens=min_tokens,
         )
 
         if df is None:
