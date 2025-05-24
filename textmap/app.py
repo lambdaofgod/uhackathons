@@ -101,6 +101,7 @@ with gr.Blocks() as demo:
                 date_column = gr.Dropdown(
                     label="Date Column", 
                     choices=[], 
+                    value="None",
                     interactive=True,
                     info="Select 'None' to skip time-based visualization"
                 )
@@ -235,8 +236,8 @@ with gr.Blocks() as demo:
                         default_date = candidate
                         break
             
-                # Add None as an option for date column
-                columns = ["None"] + columns
+            # Add None as an option for date column
+            columns = ["None"] + columns
 
             return {
                 text_column: gr.update(choices=columns, value=default_text),
