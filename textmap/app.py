@@ -372,7 +372,6 @@ with gr.Blocks() as demo:
 
             try:
                 model = DynamicTopicModel(
-                    num_topics=10,  # You could make this configurable
                     text_col="text",  # Use the standardized text column
                     time_col=(
                         "date" if has_time_data else None
