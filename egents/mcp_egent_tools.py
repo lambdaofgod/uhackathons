@@ -11,8 +11,7 @@ import fire
 from fastmcp import FastMCP
 
 # Import the classes from tool_helpers
-from tool_helpers import LinkValidator, GitHubCommitChecker
-from egents import extract_date
+from tool_helpers import LinkValidator, GitHubCommitChecker, extract_date
 
 # Create the MCP server
 mcp = FastMCP(
@@ -61,7 +60,7 @@ def main(port: int = 8000):
     Args:
         port: The port number to run the server on (default: 8000)
     """
-    mcp.run(transport="sse", port=port)
+    mcp.run(port=port)
 
 
 # Run the server if this file is executed directly
