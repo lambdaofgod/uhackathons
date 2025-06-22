@@ -1,0 +1,81 @@
+#+title: Sae Lens
+
+
+#+BEGIN_SRC python :session sae_lens.org  :exports both
+DEVICE = "mps"
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session sae_lens.org  :exports both :async
+import torch
+from transformer_lens import HookedTransformer
+from sae_lens import SAE
+
+# --- 1. Load the Main Model and the SparseAutoencoder ---
+# Use TransformerLens to load the language model
+model = HookedTransformer.from_pretrained("gemma-2-2b",    torch_dtype=torch.bfloat16)
+torch.set_grad_enabled(False) # Best practice for inference
+
+# Use SparseAutoencoderLens to load a pre-trained SparseAutoencoder from GemmaScope for a specific layer
+# (e.g., layer 8 of the residual stream)
+
+#+END_SRC
+
+#+RESULTS:
+: <torch.autograd.grad_mode.set_grad_enabled object at 0x101452410>
+
+#+BEGIN_SRC python :session sae_lens.org  :exports both :async
+from sae_lens import SAE
+sae, cfg_dict, sparsity = SAE.from_pretrained(release="gemma-scope-2b-pt-res-canonical", sae_id="layer_0/width_16k/canonical", device=DEVICE)
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session sae_lens.org  :exports both :async
+# --- 2. Get Activations for a Sample Text ---
+# Your sample text
+text = "The quick brown fox jumps over the lazy dog."
+tokens = model.to_tokens(text)
+
+# The specific layer the SAE was trained on
+hook_point = sae.cfg.hook_name
+
+# Use TransformerLens to run the model and cache the activations from that layer
+_, cache = model.run_with_cache(tokens, names_filter=[hook_point])
+activations = cache[hook_point]
+
+feature_acts_pt = sae.encode(activations)
+feature_acts = feature_acts_pt.cpu().numpy()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+Sparsity
+
+#+BEGIN_SRC python :session sae_lens.org  :exports both
+(feature_acts > 0).sum(axis=-1).sum()
+#+END_SRC
+
+#+RESULTS:
+: 1696
+
+#+BEGIN_SRC python :session sae_lens.org  :exports both
+(feature_acts > 0).sum(axis=-1)
+#+END_SRC
+
+#+RESULTS:
+: array([[738,  30,  75,  79, 315, 102,  52,  14, 207,  74,  10]])
+
+Sorted features - check these here
+https://www.neuronpedia.org/gemma-2-2b/0-gemmascope-res-16k/12838
+
+#+BEGIN_SRC python :session sae_lens.org  :exports both
+feature_acts[0].max(axis=0).argsort()[::-1]
+#+END_SRC
+
+#+RESULTS:
+: array([ 8920, 12838, 12950, ..., 10674, 10673,     0])
