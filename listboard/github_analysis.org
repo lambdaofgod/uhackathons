@@ -1,0 +1,127 @@
+#+title: Github Analysis
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both
+import pandas as pd
+from listboard.github_stars_data import get_github_stars_df, add_readmes_to_df
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both :async
+stars_df = [] #get_github_stars_df("lambdaofgod")
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both :async
+if len(stars_df) == 0:
+    stars_df = pd.read_csv("data/github_stars.csv")
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both :async
+stars_df = stars_df[~stars_df["readme"].isna()]
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both
+stars_df["readme"]
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+0       # Generative AI Knowledge Base\n\n## Descripti...
+1       # Embedding Atlas\n\nEmbedding Atlas is a tool...
+2       <p align="center">\n  <img width="350" src="do...
+3       <!--\n  Licensed to the Apache Software Founda...
+4       ### Aspire\nRepository accompanying paper for ...
+                              ...
+1502    ﻿# Awesome Deep Learning [![Awesome](https://c...
+1503    stanford_dl_ex\n==============\n\nProgramming ...
+1504    # What's that called?\n\nWhat's the name of th...
+1505    # ofxTSNE\n\nofxTSNE is an [addon](https://www...
+1506    # ml-readings\nA list of papers / videos / tut...
+Name: readme, Length: 1507, dtype: object
+#+end_example
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both
+stars_df.to_csv("data/github_stars.csv")
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both
+stars_df.to_parquet("data/github_stars.parquet")
+#+END_SRC
+
+#+RESULTS:
+: None
+
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both :async
+from sentence_transformers import SentenceTransformer
+
+embedder = SentenceTransformer("Snowflake/snowflake-arctic-embed-m")
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both
+embedder = embedder.to("mps")
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both :async
+readme_embeddings = embedder.encode(stars_df["readme"].to_list(), show_progress_bar=True)
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both :async
+readme_embeddings.shape
+#+END_SRC
+
+#+RESULTS:
+| 1508 | 768 |
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both
+from umap import UMAP
+
+
+umap_model = UMAP(n_components=2, random_state=2024, verbose=True, n_jobs=8)
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both :async
+umap_embeddings = umap_model.fit_transform(readme_embeddings)
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both
+stars_with_embeddings_df = pd.concat([stars_df, pd.DataFrame(umap_embeddings, columns=["umap_x", "umap_y"])], axis=1)
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session github_analysis.org  :exports both
+stars_with_embeddings_df.to_parquet("data/stars_with_embeddings.parquet")
+#+END_SRC
+
+#+RESULTS:
+: None

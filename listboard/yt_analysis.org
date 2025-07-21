@@ -7,9 +7,6 @@ import glob
 glob.glob("data/*")
 #+END_SRC
 
-#+RESULTS:
-| data/playlist_info.jsonl | data/Takeout |
-
 #+BEGIN_SRC python :session yt_analysis.org  :exports both :async
 playlist_df = pd.read_json("data/playlist_info.jsonl", lines=True, orient="records")
 #+END_SRC
@@ -21,35 +18,9 @@ playlist_df = pd.read_json("data/playlist_info.jsonl", lines=True, orient="recor
 playlist_df[["title", "Playlist", "description"]].head()
 #+END_SRC
 
-#+RESULTS:
-:                                                title  ...                                        description
-: 0                       Stars Of The Lid - Goodnight  ...                    "Music for Nitrous Oxide", 1995
-: 1  Ambient Music - DigitalSimplyWorld - Transmiss...  ...  Free download Solar Observers https://digitals...
-: 2                                    Sundrugs - 2082  ...  After remarkable debut "Hidden Scenes" last ye...
-: 3                 Sylvain Chauveau - A Cloud Of Dust  ...  Sylvain Chauveau - A Cloud Of Dust.\r\nTaken f...
-: 4         A Winged Victory For The Sullen - Atomos I  ...  A Winged Victory For The Sullen : www.awvfts.c...
-:
-: [5 rows x 3 columns]
-
 #+BEGIN_SRC python :session yt_analysis.org  :exports both
 playlist_df["Playlist"].value_counts().head(10)
 #+END_SRC
-
-#+RESULTS:
-#+begin_example
-Playlist
-Watch later videos          4417
-code videos                   42
-emotional support videos      33
-Historical videos             28
-Rozwoj videos                 27
-ai_tools videos               22
-llms videos                   21
-Gen art videos                19
-math_edu videos               19
-Notes videos                  17
-Name: count, dtype: int64
-#+end_example
 
 #+BEGIN_SRC python :session yt_analysis.org  :exports both
 # Import necessary libraries
@@ -60,9 +31,6 @@ from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 import numpy as np
 #+END_SRC
-
-#+RESULTS:
-: None
 
 #+BEGIN_SRC python :session yt_analysis.org  :exports both :async
 # Create feature extraction with Sentence Transformer using MPNet
@@ -125,560 +93,78 @@ for i in range(n_clusters):
     print("#" * 50)
 #+END_SRC
 
+* Youtube playlists via yt-dlp
+:PROPERTIES:
+:CREATED:  <2025-07-21 Mon> [20:35]
+:END:
+
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both
+from listboard import youtube
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both :async
+playlists = youtube.get_current_user_playlists(youtube.AuthArgs(browser="firefox"))
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both
+playlists[1].playlist_name
+#+END_SRC
+
+#+RESULTS:
+: Watch Later
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both :async
+import time
+
+start_time = time.time()
+watch_later_videos = playlists[1].get_videos()
+end_time = time.time()
+
+print(f"Time taken to fetch 'Watch Later' videos: {end_time - start_time:.2f} seconds")
+#+END_SRC
+
+#+RESULTS:
+: /var/folders/t7/9zd9yqf17_zbfq2hwm8tv9ym0000gn/T/babel-CgwgSO/python-yHh5Fj
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both
+watch_later_videos.shape
+#+END_SRC
+
+#+RESULTS:
+| 100 | 9 |
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both
+watch_later_videos["description"]
+#+END_SRC
+
 #+RESULTS:
 #+begin_example
-##################################################
-
-Cluster 0 - Top Playlists:
-Playlist
-Watch later videos          304
-emotional support videos     10
-funny videos                  4
-beka z kacapów videos        2
-Gen art videos                2
-Name: count, dtype: int64
-
-Cluster 0 - Representative Descriptions (closest to centroid):
-- [code videos] Analyzing Evil: Colonel Kurtz
-  title:
-Analyzing Evil: Colonel Kurtz
-description:
-Thanks for stopping by to check out the first epis...
-- [Watch later videos] Descending The Ideology Iceberg
-  title:
-Descending The Ideology Iceberg
-description:
-Go to https://BuyRaycon.com/jreg for 15% off you...
-- [Watch later videos] No Time for Breakfast
-  title:
-No Time for Breakfast
-description:
-🕹Your current browser is bad. Get a better one here: https...
-##################################################
-##################################################
-
-Cluster 1 - Top Playlists:
-Playlist
-Watch later videos          155
-Rozwoj videos                21
-emotional support videos     19
-Notes videos                  4
-adhd videos                   2
-Name: count, dtype: int64
-
-Cluster 1 - Representative Descriptions (closest to centroid):
-- [Watch later videos] The Sharp Axe Method
-  title:
-The Sharp Axe Method
-description:
-An unlikely guide to overwhelm and mental clarity.
-This do...
-- [Rozwoj videos] Failing Repeatedly at Life? Avoid this Cognitive Trap. | Mini-Lecture Series
-  title:
-Failing Repeatedly at Life? Avoid this Cognitive Trap. | Mini-Lecture Series
-description:
-Sig...
-- [Watch later videos] How to Unsuppress Emotions | Healthy Gamer Webinar #6
-  title:
-How to Unsuppress Emotions | Healthy Gamer Webinar #6
-description:
-If you enjoy these lecture...
-##################################################
-##################################################
-
-Cluster 2 - Top Playlists:
-Playlist
-Watch later videos    360
-Historical videos      18
-code videos             6
-Gen art videos          4
-llms videos             3
-Name: count, dtype: int64
-
-Cluster 2 - Representative Descriptions (closest to centroid):
-- [Watch later videos] Two Computer Scientists Debunk A.I. Hype with Arvind Narayanan and Sayash Kapoor - 281
-  title:
-Two Computer Scientists Debunk A.I. Hype with Arvind Narayanan and Sayash Kapoor - 281
-descri...
-- [Watch later videos] Last Week in AI #169 - Google's Search Errors, OpenAI news & DRAMA, new leaderboards
-  title:
-Last Week in AI #169 - Google's Search Errors, OpenAI news & DRAMA, new leaderboards
-descript...
-- [Watch later videos] AI HYPE - Explained by Computer Scientist || El Podcast EP48
-  title:
-AI HYPE - Explained by Computer Scientist || El Podcast EP48
-description:
-Join El Podcast Hos...
-##################################################
-##################################################
-
-Cluster 3 - Top Playlists:
-Playlist
-Watch later videos    149
-paradox videos         10
-Gry videos              2
-code videos             1
-Planszowkk videos       1
-Name: count, dtype: int64
-
-Cluster 3 - Representative Descriptions (closest to centroid):
-- [paradox videos] 2023 Stellaris Beginner's Guide | How to get started in Stellaris Tutorial for 2023
-  title:
-2023 Stellaris Beginner's Guide | How to get started in Stellaris Tutorial for 2023
-descripti...
-- [Watch later videos] Stellaris Through The Years | Our Community Reminisces
-  title:
-Stellaris Through The Years | Our Community Reminisces
-description:
-Join us as we sit down wi...
-- [Watch later videos] Nothing Compares to Stellaris
-  title:
-Nothing Compares to Stellaris
-description:
-From purging planets with monstrous doomsday weapo...
-##################################################
-##################################################
-
-Cluster 4 - Top Playlists:
-Playlist
-Watch later videos    241
-Sylw videos             5
-Dłuższe videos         3
-Rower videos            1
-ajronwejder videos      1
-Name: count, dtype: int64
-
-Cluster 4 - Representative Descriptions (closest to centroid):
-- [Watch later videos] Sabotaże w Europie i ćwiczenia z taktyczną bronią jądrową. Gen. Kraszewski: Rosja szykuje ofensywę
-  title:
-Sabotaże w Europie i ćwiczenia z taktyczną bronią jądrową. Gen. Kraszewski: Rosja szykuje ofe...
-- [Watch later videos] ROBERT MAZUREK TYPUJE WYNIKI WYBORÓW DO PARLAMENTU EUROPEJSKIEGO
-  title:
-ROBERT MAZUREK TYPUJE WYNIKI WYBORÓW DO PARLAMENTU EUROPEJSKIEGO
-description:
-W najnowszym ma...
-- [Watch later videos] POLSKA W KRYZYSIE: WYSOKIE CENY ENERGII, ODSETKI KREDYTÓW I... NOWA DEFINICJA GWAŁTU
-  title:
-POLSKA W KRYZYSIE: WYSOKIE CENY ENERGII, ODSETKI KREDYTÓW I... NOWA DEFINICJA GWAŁTU
-descript...
-##################################################
-##################################################
-
-Cluster 5 - Top Playlists:
-Playlist
-Watch later videos    297
-math_edu videos        15
-hyperbolic videos      10
-Gen art videos          9
-Manifold videos         8
-Name: count, dtype: int64
-
-Cluster 5 - Representative Descriptions (closest to centroid):
-- [Math ML videos] Mathilde Papillon - Beyond Euclid: An Illustrated Guide to Modern Machine Learning...
-  title:
-Mathilde Papillon - Beyond Euclid: An Illustrated Guide to Modern Machine Learning...
-descrip...
-- [Watch later videos] Mathilde Papillon - Beyond Euclid: An Illustrated Guide to Modern Machine Learning...
-  title:
-Mathilde Papillon - Beyond Euclid: An Illustrated Guide to Modern Machine Learning...
-descrip...
-- [hyperbolic videos] Topology, Geometry and Life in Three Dimensions - with Caroline Series
-  title:
-Topology, Geometry and Life in Three Dimensions - with Caroline Series
-description:
-If you im...
-##################################################
-##################################################
-
-Cluster 6 - Top Playlists:
-Playlist
-Watch later videos        152
-Sylw videos                10
-ajronwejder videos          2
-Wado Vice videos            2
-beka z kacapów videos      2
-Name: count, dtype: int64
-
-Cluster 6 - Representative Descriptions (closest to centroid):
-- [Watch later videos] Kto rządził III RP. W sidłach układu wiedeńskiego
-  title:
-Kto rządził III RP. W sidłach układu wiedeńskiego
-description:
-Zacznij wspierać ten kanał, a ...
-- [Watch later videos] ROSJA PRZERZUCA ŻOŁNIERZY Z KRÓLEWCA DO KURSKA I STRASZY POLSKĄ
-  title:
-ROSJA PRZERZUCA ŻOŁNIERZY Z KRÓLEWCA DO KURSKA I STRASZY POLSKĄ
-description:
-Audycja przeznac...
-- [Watch later videos] JAK ŁATWO ZAMÓWIĆ NARKOTYKI W WARSZAWIE? ZROBI TO NAWET DZIECKO W CIĄGU GODZINY
-  title:
-JAK ŁATWO ZAMÓWIĆ NARKOTYKI W WARSZAWIE? ZROBI TO NAWET DZIECKO W CIĄGU GODZINY
-description:
-...
-##################################################
-##################################################
-
-Cluster 7 - Top Playlists:
-Playlist
-Watch later videos    144
-math_edu videos         2
-Historical videos       1
-Gen art videos          1
-Fizyka videos           1
-Name: count, dtype: int64
-
-Cluster 7 - Representative Descriptions (closest to centroid):
-- [Watch later videos] Strange Expansion of the Universe Results From the Most Accurate Map
-  title:
-Strange Expansion of the Universe Results From the Most Accurate Map
-description:
-Get a Wonde...
-- [Watch later videos] Brian Keating: Cosmology, Astrophysics, Aliens & Losing the Nobel Prize | Lex Fridman Podcast #257
-  title:
-Brian Keating: Cosmology, Astrophysics, Aliens & Losing the Nobel Prize | Lex Fridman Podcast...
-- [Watch later videos] Biggest and Most Unusual Discoveries In Space Sciences of 2023 - Video Compilation
-  title:
-Biggest and Most Unusual Discoveries In Space Sciences of 2023 - Video Compilation
-descriptio...
-##################################################
-##################################################
-
-Cluster 8 - Top Playlists:
-Playlist
-Watch later videos    147
-Fizyka videos           3
-Elektronika videos      1
-grafika videos          1
-EDU videos              1
-Name: count, dtype: int64
-
-Cluster 8 - Representative Descriptions (closest to centroid):
-- [Watch later videos] Why Everything You Thought You Knew About Quantum Physics is Different - with Philip Ball
-  title:
-Why Everything You Thought You Knew About Quantum Physics is Different - with Philip Ball
-des...
-- [Watch later videos] The quantum world: Dreams and delusions | Roger Penrose, Sabine Hossenfelder, Michio Kaku, and more!
-  title:
-The quantum world: Dreams and delusions | Roger Penrose, Sabine Hossenfelder, Michio Kaku, an...
-- [Watch later videos] Quantum Theory's Most Incredible Prediction | Space Time
-  title:
-Quantum Theory's Most Incredible Prediction | Space Time
-description:
-Viewers like you help m...
-##################################################
-##################################################
-
-Cluster 9 - Top Playlists:
-Playlist
-Watch later videos    384
-Chiny videos            4
-Filozofia videos        3
-Dłuższe videos         2
-ambient videos          1
-Name: count, dtype: int64
-
-Cluster 9 - Representative Descriptions (closest to centroid):
-- [Watch later videos] Ancient Greek State in Afghanistan
-  title:
-Ancient Greek State in Afghanistan
-description:
-The conquests of Alexander the Great and the ...
-- [Watch later videos] Historical Facts that make You say ?????
-  title:
-Historical Facts that make You say ?????
-description:
-Historical Facts that make You say ????...
-- [Watch later videos] The War That Ended the Ancient World
-  title:
-The War That Ended the Ancient World
-description:
-In the early seventh century, a generation-...
-##################################################
-##################################################
-
-Cluster 10 - Top Playlists:
-Playlist
-Watch later videos     190
-code videos             14
-Elixir videos            4
-Rozwoj videos            3
-Emaxtensions videos      2
-Name: count, dtype: int64
-
-Cluster 10 - Representative Descriptions (closest to centroid):
-- [Watch later videos] Rust Demystified 🪄 Simplifying The Toughest Parts
-  title:
-Rust Demystified 🪄 Simplifying The Toughest Parts
-description:
-Rust can be frustrating to lea...
-- [Watch later videos] Compiler-Driven Development in Rust
-  title:
-Compiler-Driven Development in Rust
-description:
-Compiler-Driven Development in Rust, includi...
-- [Watch later videos] From Python to Rust
-  title:
-From Python to Rust
-description:
-"From Python to Rust" by Alexis Bourget, HarfangLab. Talk gi...
-##################################################
-##################################################
-
-Cluster 11 - Top Playlists:
-Playlist
-Watch later videos    52
-sambo videos          12
-Rower videos           6
-Silka videos           2
-chill videos           1
-Name: count, dtype: int64
-
-Cluster 11 - Representative Descriptions (closest to centroid):
-- [Watch later videos] How to Raise Your FTP, Full Workouts and Training Plan
-  title:
-How to Raise Your FTP, Full Workouts and Training Plan
-description:
-I go in depth on how to r...
-- [Watch later videos] TrainingPeaks Explained! | How To Get The Most From TP's Online Cycling Coaching Platform
-  title:
-TrainingPeaks Explained! | How To Get The Most From TP's Online Cycling Coaching Platform
-des...
-- [Watch later videos] 3 Ways the Average Cyclist can use Training Load Metrics | Practical Tips!
-  title:
-3 Ways the Average Cyclist can use Training Load Metrics | Practical Tips!
-description:
-Thank...
-##################################################
-##################################################
-
-Cluster 12 - Top Playlists:
-Playlist
-Watch later videos    45
-dubstepy videos       11
-ambient videos         8
-Silka videos           7
-sf videos              7
-Name: count, dtype: int64
-
-Cluster 12 - Representative Descriptions (closest to centroid):
-- [dhol videos] Alpharisc - Video Disco
-  title:
-Alpharisc - Video Disco
-description:
-A high energy record sure to get you on your feet. Dance...
-- [psy videos] Logic Bomb - Unlimited
-  title:
-Logic Bomb - Unlimited
-description:
-🔴🎵 → Subscribe to TRANCENTRAL: http://bit.ly/TrancentralS...
-- [praca videos] Deus Ex: Mankind Divided Ambient Mix
-  title:
-Deus Ex: Mankind Divided Ambient Mix
-description:
-Mix of most in-game ambient tracks, ripped ...
-##################################################
-##################################################
-
-Cluster 13 - Top Playlists:
-Playlist
-Watch later videos            212
-cog_ling videos                 9
-Analytic philosophy videos      3
-logic videos                    2
-Dłuższe videos                 1
-Name: count, dtype: int64
-
-Cluster 13 - Representative Descriptions (closest to centroid):
-- [Watch later videos] On Language and Logic | Saul Kripke and Timothy Williamson
-  title:
-On Language and Logic | Saul Kripke and Timothy Williamson
-description:
-Watch the full talk a...
-- [Watch later videos] The shape of language (with Peter Gärdenfors)
-  title:
-The shape of language (with Peter Gärdenfors)
-description:
-Unfortunately, most people view la...
-- [Watch later videos] The Linguistics Iceberg Explained
-  title:
-The Linguistics Iceberg Explained
-description:
-Patreon: https://www.patreon.com/duncanclarke
-...
-##################################################
-##################################################
-
-Cluster 14 - Top Playlists:
-Playlist
-Watch later videos    157
-Elektronika videos      4
-Epapier videos          1
-ai_tools videos         1
-Name: count, dtype: int64
-
-Cluster 14 - Representative Descriptions (closest to centroid):
-- [Watch later videos] The AI Hardware Arms Race Is Getting Out of Hand
-  title:
-The AI Hardware Arms Race Is Getting Out of Hand
-description:
-Check out Gamma.app now using t...
-- [Watch later videos] 17 weird new tech products at CES 2025 you need right now...
-  title:
-17 weird new tech products at CES 2025 you need right now...
-description:
-Try Brilliant free ...
-- [Watch later videos] Secret Shopping My Investment - Secret Shopping Framework Laptops
-  title:
-Secret Shopping My Investment - Secret Shopping Framework Laptops
-description:
-Get 20% off De...
-##################################################
-##################################################
-
-Cluster 15 - Top Playlists:
-Playlist
-Watch later videos    251
-llms videos            10
-ai_tools videos         3
-Math ML videos          3
-Notes videos            3
-Name: count, dtype: int64
-
-Cluster 15 - Representative Descriptions (closest to centroid):
-- [Watch later videos] Jay Alammar on LLMs, RAG, and AI Engineering
-  title:
-Jay Alammar on LLMs, RAG, and AI Engineering
-description:
-Jay Alammar, renowned AI educator a...
-- [Watch later videos] How large language models work (and why that's why they don't)
-  title:
-How large language models work (and why that's why they don't)
-description:
-We are at the pre...
-- [Watch later videos] Deep Dive into LLMs like ChatGPT
-  title:
-Deep Dive into LLMs like ChatGPT
-description:
-This is a general audience deep dive into the L...
-##################################################
-##################################################
-
-Cluster 16 - Top Playlists:
-Playlist
-Watch later videos    281
-ai_tools videos        12
-Openai o1 videos       10
-llms videos             6
-MLOps videos            3
-Name: count, dtype: int64
-
-Cluster 16 - Representative Descriptions (closest to centroid):
-- [llms videos] AutoGen Tutorial: Create GODLY Custom AI Agents EASILY (Installation Tutorial)
-  title:
-AutoGen Tutorial: Create GODLY Custom AI Agents EASILY (Installation Tutorial)
-description:
-I...
-- [Watch later videos] AutoGen Tutorial: Create GODLY Custom AI Agents EASILY (Installation Tutorial)
-  title:
-AutoGen Tutorial: Create GODLY Custom AI Agents EASILY (Installation Tutorial)
-description:
-I...
-- [Watch later videos] Aider UPDATE + Gemini 1.5 Pro-2: The BEST AI Coding Agent + FREE! (New LLMs, Commands)
-  title:
-Aider UPDATE + Gemini 1.5 Pro-2: The BEST AI Coding Agent + FREE! (New LLMs, Commands)
-descri...
-##################################################
-##################################################
-
-Cluster 17 - Top Playlists:
-Playlist
-Watch later videos    341
-code videos            15
-UI videos               7
-Notes videos            7
-Elixir videos           6
-Name: count, dtype: int64
-
-Cluster 17 - Representative Descriptions (closest to centroid):
-- [Watch later videos] HTMX Sucks
-  title:
-HTMX Sucks
-description:
-Recorded live on twitch, GET IN
-
-### Article
-https://htmx.org/essays...
-- [Watch later videos] There Is So Much Here..
-  title:
-There Is So Much Here..
-description:
-Recorded live on twitch, GET IN
-
-### Links
-- https://re...
-- [code videos] Developer Productivity by ThePrimeagen | Preview
-  title:
-Developer Productivity by ThePrimeagen | Preview
-description:
-Full Course:
-Developer Producti...
-##################################################
-##################################################
-
-Cluster 18 - Top Playlists:
-Playlist
-Watch later videos    139
-Bio videos              3
-Filozofia videos        3
-code videos             1
-Manifold videos         1
-Name: count, dtype: int64
-
-Cluster 18 - Representative Descriptions (closest to centroid):
-- [Watch later videos] Accidental Discovery of Ancient Organisms We Never Knew Existed
-  title:
-Accidental Discovery of Ancient Organisms We Never Knew Existed
-description:
-Get a Wonderful ...
-- [Watch later videos] These Creatures Were Darwin's Greatest Enemy
-  title:
-These Creatures Were Darwin's Greatest Enemy
-description:
-They may not look like much, but be...
-- [Filozofia videos] Does evolution have a direction? | Lisa Feldman Barrett and Lex Fridman
-  title:
-Does evolution have a direction? | Lisa Feldman Barrett and Lex Fridman
-description:
-Lex Frid...
-##################################################
-##################################################
-
-Cluster 19 - Top Playlists:
-Playlist
-Watch later videos        416
-Historical videos           3
-Dłuższe videos             3
-stonks videos               2
-beka z kacapów videos      2
-Name: count, dtype: int64
-
-Cluster 19 - Representative Descriptions (closest to centroid):
-- [Watch later videos] Something Has Changed in the U.S. Economy
-  title:
-Something Has Changed in the U.S. Economy
-description:
-Check out our previous videos! ⬇️
-
-🔴Wh...
-- [Watch later videos] Marc Andreessen: It’s Morning Again In America
-  title:
-Marc Andreessen: It’s Morning Again In America
-description:
-The interview delves into the tec...
-- [Watch later videos] Peter Thiel on the Triumph of the Counter-Elites
-  title:
-Peter Thiel on the Triumph of the Counter-Elites
-description:
-Think for yourself. Subscribe t...
-##################################################
+0     Can I beat this Challenging Origin in Stellari...
+1     AI models are getting tasked to do increasingl...
+2     Bad designs are still bad. AI doesn’t make it ...
+3     Today, we learn how to build secure generative...
+4     35% off discount code from our upcoming course...
+                            ...
+95    Looking to grow your business online? Odoo is ...
+96    💻Make your life easier and try Dashlane on you...
+97    The simple idea of a single possibility of the...
+98    #history #yugoslavia #balkan \nGet InVideo AI ...
+99    Subskrybuj kanał TVN24 i bądź na bieżąco: http...
+Name: description, Length: 100, dtype: object
 #+end_example
+
+#+BEGIN_SRC python :session yt_analysis.org  :exports both
+watch_later_videos[["title", "description"]].iloc[:50]
+#+END_SRC
+
+#+RESULTS:
+: Empty DataFrame
+: Columns: [title, description]
+: Index: []

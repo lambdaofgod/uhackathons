@@ -3,10 +3,11 @@ import logging
 from typing import List, Optional, Dict, Any
 import pandera as pa
 from pandera.typing import DataFrame, Series
-import tqdm
+from tqdm.contrib.concurrent import process_map
 from pathlib import Path
 from datetime import datetime
 import json
+import requests
 from listboard.github_stars import get_user_stars
 
 # Define schema for GitHub star information
@@ -23,6 +24,49 @@ github_star_schema = pa.DataFrameSchema(
     },
     strict=False,
 )
+
+
+def _get_readme_content(full_name: str) -> Optional[str]:
+    """Helper function to get README content for a repo by fetching the raw file."""
+    branches_to_try = ["main", "master"]
+
+    for branch in branches_to_try:
+        url = f"https://raw.githubusercontent.com/{full_name}/{branch}/README.md"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.text
+            elif response.status_code != 404:
+                logging.warning(
+                    f"Failed to fetch README for {full_name} from branch {branch} with status: {response.status_code}"
+                )
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Error fetching README for {full_name}: {e}")
+            # Stop trying for this repo if a request fails
+            break
+
+    logging.warning(f"No README.md found for {full_name} in main or master branch")
+    return None
+
+
+def add_readmes_to_df(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Adds a 'readme' column to a DataFrame of GitHub repositories by fetching raw README.md files.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing a 'full_name' column.
+
+    Returns:
+        pd.DataFrame: The DataFrame with an added 'readme' column.
+    """
+    if "full_name" not in df.columns:
+        raise ValueError("Input DataFrame must have a 'full_name' column.")
+
+    logging.info("Fetching READMEs for repositories...")
+    full_names = df["full_name"].tolist()
+    readmes = process_map(_get_readme_content, full_names, desc="Fetching READMEs")
+    df["readme"] = readmes
+    return df
 
 
 def get_github_stars_df(
