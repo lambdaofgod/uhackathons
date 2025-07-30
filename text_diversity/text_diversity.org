@@ -1,0 +1,141 @@
+#+title: Text Diversity
+
+#+BEGIN_SRC python :session text_diversity.org  :exports both
+import dppy.finite_dpps
+import sentence_transformers
+from sklearn import metrics
+import pathlib
+import pandas as pd
+import numpy as np
+import scipy
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session text_diversity.org  :exports both
+def get_texts_similarity_matrix_df(texts, feature_fn, titles=None, similarity_score="cosine"):
+    text_features = feature_fn(texts)
+    similarity_matrix = metrics.pairwise.cosine_similarity(text_features, text_features)
+    if titles is None:
+        titles = texts
+    similarities_df = pd.DataFrame(data=similarity_matrix, columns=titles, index=titles)
+    return similarities_df
+#+END_SRC
+
+#+BEGIN_SRC python :session text_diversity.org  :exports both :async
+model = sentence_transformers.SentenceTransformer("sentence-transformers/static-similarity-mrl-multilingual-v1")
+model
+#+END_SRC
+
+#+RESULTS:
+: SentenceTransformer(
+:   (0): StaticEmbedding(
+:     (embedding): EmbeddingBag(105879, 1024, mode='mean')
+:   )
+: )
+
+#+BEGIN_SRC python :session text_diversity.org  :exports both
+
+#+END_SRC
+
+#+RESULTS:
+: SentenceTransformer(
+:   (0): StaticEmbedding(
+:     (embedding): EmbeddingBag(105879, 1024, mode='mean')
+:   )
+: )
+
+#+BEGIN_SRC python :session text_diversity.org  :exports both
+folder_names = [str(p).strip("../") for p in list(pathlib.Path("../").glob("*"))]
+folder_names
+#+END_SRC
+
+#+RESULTS:
+| GraphScraping | git | aider.tags.cache.v3 | tts | scraping | README.org | category_thourism | candlex | textmap | math | vespa_util | mongodb | ipynb_checkpoints | pdf_parsing | aider.input.history | audio | aider.chat.history.md | aider.tags.cache.v4 | reinforcement_learning | untaingle | vlms | weaviate | home_utils | text_diversity | llms | noteboard | ml_algorithms | arxivist | gitignore | gitmodules | neucgraph | saerch | fastrag_util | listboard | lmibrarian | egents |
+
+
+* Sampling diverse texts using DPPy
+
+DPPy uses Determinantal Point Processes
+
+#+BEGIN_SRC python :session text_diversity.org  :exports both
+texts = folder_names
+similarities = get_texts_similarity_matrix_df(texts, feature_fn=model.encode)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session text_diversity.org  :exports both
+eig = np.linalg.eig(similarities.astype("float64"))
+
+dpp_K = dppy.finite_dpps.FiniteDPP("likelihood", L=similarities.values)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session text_diversity.org  :exports both
+np.linalg.det(similarities)
+#+END_SRC
+
+#+RESULTS:
+: 0.0007511261
+
+#+BEGIN_SRC python :session text_diversity.org  :exports both
+idxs = range(1, 11)
+ds = []
+n_trials = 100
+
+
+for i in idxs:
+    trials = []
+    for tr in range(n_trials):
+        sampled_idxs = dpp_K.sample_exact_k_dpp(size=i, random_state=tr)
+        d_trial = np.linalg.det(similarities.iloc[sampled_idxs, sampled_idxs])
+        trials.append(d_trial)
+    ds.append(np.mean(trials))
+
+ds = pd.Series(ds, index=idxs)
+#+END_SRC
+
+#+RESULTS:
+
+#+RESULTS:
+#+begin_example
+1     1.000000
+2     0.992142
+3     0.981271
+4     0.948243
+5     0.920680
+6     0.868547
+7     0.831114
+8     0.778586
+9     0.728573
+10    0.662098
+dtype: float32
+#+end_example
+
+#+begin_src python :session text_diversity.org :results file link
+import matplotlib.pyplot as plt
+plt.figure(figsize=(4, 4))
+
+ds.plot()
+plt.savefig("f1.png")
+"f1.png"
+#+end_src
+
+#+RESULTS:
+[[file:f1.png]]
+
+** Issues
+
+- dppy is pretty flaky when it comes to parameters
+- it's nontrivial to initialize DPP object - I got errors when I tried to initialize with`correlation` mode because of numerical errors (the eigenvalues were not orthogonal)
+- k-DPP fails for some reason that isn't really obvious
+#+BEGIN_SRC python :session text_diversity.org  :exports both
+  File "/home/kuba/Projects/uhackathons/text_diversity/.venv/lib/python3.12/site-packages/dppy/finite_dpps.py", line 654, in sample_exact_k_dpp
+    V = k_dpp_eig_vecs_selector(self.L_eig_vals, self.eig_vecs,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kuba/Projects/uhackathons/text_diversity/.venv/lib/python3.12/site-packages/dppy/exact_sampling.py", line 1296, in k_dpp_eig_vecs_selector
+    if rng.rand() < eig_vals[n - 1] * E_poly[k - 1, n - 1] / E_poly[k, n]:
+
+#+END_SRC
