@@ -5,10 +5,15 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "embedding-atlas>=0.7.1",
     "fire>=0.7.0",
+    "google-api-python-client>=2.176.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-auth-oauthlib>=1.2.2",
     "llvmlite>=0.44.0",
     "pandas>=2.2.3",
     "pandera>=0.23.1",
+    "pyarrow>=20.0.0",
     "pydantic>=2.10.6",
     "scikit-learn>=1.6.1",
     "sentence-transformers>=4.0.1",

@@ -1,0 +1,7 @@
+* README
+
+** lxml shenanigans
+
+On Mac when you have problems with lxml use
+
+CFLAGS="-Wno-incompatible-function-pointer-types" uv pip install lxml==4.9.4 
