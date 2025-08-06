@@ -10,6 +10,12 @@ dependencies = [
     "fastmcp>=2.2.7",
     "fire>=0.7.0",
     "ipdb>=0.13.13",
+    "litellm>=1.72.2",
+    "mem0ai>=0.1.106",
+    "ollama>=0.5.1",
+    "openinference-instrumentation-smolagents>=0.1.12",
     "requests>=2.32.3",
+    "sentence-transformers>=4.1.0",
+    "smolagents[mcp]>=1.17.0",
     "uvicorn>=0.34.2",
 ]

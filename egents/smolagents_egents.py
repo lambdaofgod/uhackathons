@@ -82,7 +82,7 @@ with open(pathlib.Path("~/.keys/firecrawl_key.txt").expanduser()) as f:
     os.environ["FIRECRAWL_API_KEY"] = fc_api_key
 
 
-anthropic_model_name = "claude-3-7-sonnet-20250219"
+anthropic_model_name = "claude-sonnet-4-20250514"
 gemini_model_name = "gemini-2.5-pro-exp-03-25"
 
 model = LiteLLMModel(
@@ -119,6 +119,7 @@ agent = CodeAgent(
     description="Generalist agent that uses helper WebAgent for searching the web. WebAgent is used carefully because of the web search rate limits - if relevant links were collected, the WebAgent should receive them",
     managed_agents=[web_agent],
     additional_authorized_imports=additional_authorized_imports,
+    max_steps=3,
 )
 coding_agent = CodeAgent(
     tools=[], model=thinking_model, additional_authorized_imports=["requests"]
