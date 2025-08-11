@@ -83,10 +83,10 @@ with open(pathlib.Path("~/.keys/firecrawl_key.txt").expanduser()) as f:
 
 
 anthropic_model_name = "claude-sonnet-4-20250514"
-gemini_model_name = "gemini-2.5-pro-exp-03-25"
+gemini_model_name = "gemini/gemini-2.5-pro"
 
 model = LiteLLMModel(
-    anthropic_model_name, temperature=0.2, max_tokens=2048
+    gemini_model_name, temperature=0.2, max_tokens=2048
 )  # use_caching=True)
 
 tools = [check_link_statuses_tool, get_repo_latest_commit_date]

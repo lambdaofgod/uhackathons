@@ -43,16 +43,12 @@ with open(pathlib.Path("~/.keys/brave.txt").expanduser()) as f:
 :CREATED:  <2025-06-09 Mon> [14:08]
 :END:
 
-#+BEGIN_SRC python :session egents :exports both
+#+BEGIN_SRC python :session egents.org  :exports both
 from phoenix.otel import register
-import os
+from openinference.instrumentation.smolagents import SmolagentsInstrumentor
 
-os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = "http://localhost:6006"
-# configure the Phoenix tracer
-tracer_provider = register(
-  project_name="egents", # Default is 'default'
-  auto_instrument=True # Auto-instrument your app based on installed OI dependencies
-)
+register()
+SmolagentsInstrumentor().instrument()
 #+END_SRC
 
 #+RESULTS:
@@ -69,7 +65,7 @@ from smolagents_egents import get_agent_output
 
 ** Example run
 
-#+BEGIN_SRC python :session egents :exports both :async
+#+Begin_SRC python :session egents :exports both :async
 prompt = """
 What is the MCP (Model Context Protocol)? What is its purpose?
 """.strip()
@@ -78,7 +74,7 @@ agent_response
 #+END_SRC
 
 #+RESULTS:
-: /var/folders/t7/9zd9yqf17_zbfq2hwm8tv9ym0000gn/T/babel-dg6xf8/python-19AQPi
+: The Model Context Protocol (MCP) is an open-source framework that standardizes how AI models connect with external data sources and tools. Its purpose is to simplify and secure this process, enabling AI to access and use a wider range of information, thus improving its performance and relevance. The key benefits of MCP are improved AI performance, simplified development, enhanced security, increased scalability, and a more open ecosystem for AI development.
 
 #+BEGIN_SRC python :session egents.org  :exports both :async
 prompt = """

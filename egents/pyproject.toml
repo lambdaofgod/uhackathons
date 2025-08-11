@@ -5,17 +5,18 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "arize-phoenix>=11.21.0",
     "beautifulsoup4>=4.13.4",
     "fastapi>=0.115.12",
     "fastmcp>=2.2.7",
     "fire>=0.7.0",
+    "firecrawl-py>=2.16.5",
     "ipdb>=0.13.13",
-    "litellm>=1.72.2",
+    "litellm>=1.75.5.post1",
     "mem0ai>=0.1.106",
     "ollama>=0.5.1",
-    "openinference-instrumentation-smolagents>=0.1.12",
     "requests>=2.32.3",
     "sentence-transformers>=4.1.0",
-    "smolagents[mcp]>=1.17.0",
+    "smolagents[mcp,telemetry,toolkit]>=1.17.0",
     "uvicorn>=0.34.2",
 ]
