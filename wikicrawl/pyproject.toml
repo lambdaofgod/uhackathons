@@ -1,0 +1,27 @@
+[project]
+name = "wikicrawl"
+version = "0.1.0"
+description = "Wiki crawling and MediaWiki dump parsing utilities"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "crawl4ai>=0.7.4",
+    "fire>=0.7.1",
+    "mwxml>=0.3.6",
+    "orjson>=3.11.5",
+    "pandas>=2.3.2",
+    "playwright>=1.55.0",
+    "polars>=1.36.1",
+    "scrapy>=2.13.3",
+    "tabulate>=0.9.0",
+    "wikiteam3>=4.4.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
