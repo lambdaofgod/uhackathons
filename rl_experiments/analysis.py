@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 def fetch_results(tracking_uri: str = "./mlruns") -> pd.DataFrame:
     """Query all completed runs from MLFlow and return a tidy DataFrame.
 
-    Columns: experiment_name, env_id, algo_name, seed, eval/mean_reward, eval/std_reward
+    Columns: env_id, experiment_group, algo_name, seed, mean_reward, std_reward
     """
     client = MlflowClient(tracking_uri=tracking_uri)
 
@@ -26,8 +26,8 @@ def fetch_results(tracking_uri: str = "./mlruns") -> pd.DataFrame:
             if "eval/mean_reward" not in metrics:
                 continue
             rows.append({
-                "experiment_name": exp.name,
-                "env_id": params.get("env_id", ""),
+                "env_id": exp.name,
+                "experiment_group": run.data.tags.get("experiment_group", ""),
                 "algo_name": params.get("algo_name", ""),
                 "seed": int(params.get("seed", 0)),
                 "mean_reward": metrics["eval/mean_reward"],

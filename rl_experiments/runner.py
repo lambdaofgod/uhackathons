@@ -6,7 +6,10 @@ from dataclasses import dataclass
 
 import gymnasium as gym
 from stable_baselines3 import A2C, DQN, PPO
-from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.callbacks import (
+    EvalCallback,
+    StopTrainingOnNoModelImprovement,
+)
 from stable_baselines3.common.monitor import Monitor
 
 from rl_experiments.config import RunConfig
@@ -50,12 +53,18 @@ def run_experiment(
         **config.algo_kwargs,
     )
 
+    stop_callback = StopTrainingOnNoModelImprovement(
+        max_no_improvement_evals=5,
+        verbose=1,
+    )
+
     eval_callback = eval_callback_class(
         eval_env,
         eval_freq=config.eval_freq,
         n_eval_episodes=config.n_eval_episodes,
         log_path=config.log_dir,
         best_model_save_path=config.log_dir,
+        callback_after_eval=stop_callback,
     )
 
     logger.info(

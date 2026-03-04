@@ -36,12 +36,11 @@ def _run_params(config: RunConfig) -> dict[str, Any]:
 def run_exists(config: RunConfig) -> bool:
     """Check if a run with matching params already exists in MLFlow."""
     client = MlflowClient()
-    experiment = client.get_experiment_by_name(config.experiment_name)
+    experiment = client.get_experiment_by_name(config.env_id)
     if experiment is None:
         return False
 
     filter_parts = [
-        f"params.env_id = '{config.env_id}'",
         f"params.algo_name = '{config.algo_name}'",
         f"params.seed = '{config.seed}'",
     ]
@@ -82,13 +81,14 @@ class MlflowEvalCallback(EvalCallback):
 @contextmanager
 def start_mlflow_run(config: RunConfig):
     """Context manager that opens an MLFlow run and logs params."""
-    mlflow.set_experiment(config.experiment_name)
+    mlflow.set_experiment(config.env_id)
 
     with mlflow.start_run(
-        run_name=f"{config.algo_name}_{config.env_id}_seed{config.seed}"
+        run_name=f"{config.algo_name}_seed{config.seed}"
     ):
         mlflow.log_params(_run_params(config))
         mlflow.log_param("total_timesteps", config.total_timesteps)
+        mlflow.set_tag("experiment_group", config.experiment_name)
         yield
 
 
