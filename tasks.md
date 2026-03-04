@@ -54,10 +54,41 @@ Based on `experiment_runner_plan.md`. Parallelism is out of scope for now.
 
 ## Phase 5: Analysis (`rl_experiments/analysis.py`)
 
-- [ ] Query MLFlow, group by `(env, algo)`, aggregate across seeds
-- [ ] Comparison plots: one figure per env, shaded confidence bands
-- [ ] Summary table
+- [x] Query MLFlow, group by `(env, algo)`, aggregate across seeds
+- [x] Comparison plots: one figure per env, bar chart with std error bars
+- [x] Summary table
+- [x] `--analyze` CLI flag
 
 ## Phase 6: Integration & Polish
 
 - [ ] End-to-end test: full config through all phases
+
+## Validation Checklist
+
+End-to-end validation that everything works with MLFlow:
+
+```bash
+# 1. Clean slate
+rm -rf mlruns/ results/
+
+# 2. Run quick experiments
+uv run python -m rl_experiments --config experiments_quick.yaml
+
+# 3. Verify runs logged to MLFlow
+uv run python -m rl_experiments --analyze
+
+# 4. Launch MLFlow UI and browse
+uv run mlflow ui
+# Open http://127.0.0.1:5000
+# - Check experiments in left sidebar (discrete_sparse, continuous_control)
+# - Click into runs, verify Params/Metrics/Artifacts tabs
+# - Select multiple runs and click Compare
+
+# 5. Re-run and verify skip-if-exists
+uv run python -m rl_experiments --config experiments_quick.yaml
+# Should say "Skipping (already exists)" for all runs
+
+# 6. Run tests
+uv run pytest -m "not slow"
+uv run pytest -v  # includes slow integration tests
+```

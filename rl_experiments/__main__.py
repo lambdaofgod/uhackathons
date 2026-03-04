@@ -3,6 +3,7 @@
 import argparse
 import logging
 
+from rl_experiments.analysis import print_summary
 from rl_experiments.config import expand_matrix, load_config
 from rl_experiments.runner import run_experiment
 from rl_experiments.tracking import log_run, run_exists, setup_tracking
@@ -22,6 +23,11 @@ def main() -> None:
         action="store_true",
         help="Print the experiment matrix without training",
     )
+    parser.add_argument(
+        "--analyze",
+        action="store_true",
+        help="Print summary table and save comparison plots from existing runs",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -31,6 +37,11 @@ def main() -> None:
 
     config = load_config(args.config)
     runs = expand_matrix(config)
+
+    if args.analyze:
+        setup_tracking()
+        print_summary()
+        return
 
     if args.dry_run:
         print(f"Experiment matrix: {len(runs)} runs\n")
