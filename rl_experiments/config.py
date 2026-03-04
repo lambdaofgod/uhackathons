@@ -1,5 +1,6 @@
 """Config parsing for the RL experiment runner."""
 
+import inspect
 import logging
 import warnings
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import Any
 import gymnasium as gym
 import yaml
 from pydantic import BaseModel
+from stable_baselines3 import A2C, DQN, PPO
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +18,12 @@ ALGO_CLASS_MAP = {
     "ppo": "ppo",
     "a2c": "a2c",
     "reinforce": "a2c",
+}
+
+SB3_CLASSES = {
+    "dqn": DQN,
+    "ppo": PPO,
+    "a2c": A2C,
 }
 
 
@@ -53,10 +61,12 @@ class FullConfig(BaseModel):
 
 
 def load_config(path: str | Path) -> FullConfig:
-    """Load and parse the YAML config file."""
+    """Load, parse, and validate the YAML config file."""
     with open(path) as f:
         raw = yaml.safe_load(f)
-    return FullConfig(**raw)
+    config = FullConfig(**raw)
+    validate_algo_kwargs(config)
+    return config
 
 
 def resolve_algo_config(
@@ -66,6 +76,11 @@ def resolve_algo_config(
 
     Returns the SB3 class key and the merged kwargs dict (with _base removed).
     """
+    if algo_name not in algorithms:
+        raise ValueError(
+            f"Unknown algorithm '{algo_name}'. "
+            f"Defined algorithms: {list(algorithms.keys())}"
+        )
     config = dict(algorithms[algo_name])
     base_name = config.pop("_base", None)
 
@@ -91,6 +106,32 @@ def resolve_algo_config(
             )
 
     return algo_class, config
+
+
+def validate_algo_kwargs(config: FullConfig) -> None:
+    """Validate all algorithm kwargs against SB3 constructor signatures.
+
+    Raises ValueError if any kwarg is not accepted by the resolved SB3 class.
+    """
+    # Params managed by the runner, not user config
+    runner_managed = {"env", "seed", "verbose"}
+
+    for algo_name in {
+        algo for group in config.experiments for algo in group.algorithms
+    }:
+        algo_class_key, kwargs = resolve_algo_config(algo_name, config.algorithms)
+        sb3_class = SB3_CLASSES[algo_class_key]
+        sig = inspect.signature(sb3_class.__init__)
+        valid_params = set(sig.parameters.keys()) - {"self"}
+
+        user_params = set(kwargs.keys())
+        invalid = user_params - valid_params - runner_managed
+        if invalid:
+            raise ValueError(
+                f"Algorithm '{algo_name}' (resolved to {sb3_class.__name__}) "
+                f"has invalid kwargs: {sorted(invalid)}. "
+                f"Valid params: {sorted(valid_params - runner_managed)}"
+            )
 
 
 def is_compatible(env_id: str, algo_name: str) -> bool:

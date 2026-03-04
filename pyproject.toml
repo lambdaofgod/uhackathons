@@ -13,3 +13,13 @@ dependencies = [
     "stable-baselines3>=2.7.1",
     "swig>=4.4.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests that train models (deselect with '-m \"not slow\"')",
+]

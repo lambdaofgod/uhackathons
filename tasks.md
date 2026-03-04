@@ -22,27 +22,35 @@ Based on `experiment_runner_plan.md`. Parallelism is out of scope for now.
 
 ## Phase 2: Runner (`rl_experiments/runner.py`)
 
-- [ ] Define `ALGO_MAP` and `RunResult`
-- [ ] Implement `run_experiment(config: RunConfig) -> RunResult`
-- [ ] Smoke test: PPO + CartPole, verify training completes and model saves
+- [x] Define `ALGO_MAP` and `RunResult`
+- [x] Implement `run_experiment(config: RunConfig) -> RunResult`
+- [x] Smoke test: PPO + CartPole, verify training completes and model saves
 
 ## Phase 2.5: Config Validation
 
-- [ ] Introspect SB3 class constructor signatures (`inspect.signature`)
-- [ ] Validate all YAML kwargs against the resolved SB3 class (handle `_base` aliases)
-- [ ] Fail fast at config-load time with clear errors
+- [x] Introspect SB3 class constructor signatures (`inspect.signature`)
+- [x] Validate all YAML kwargs against the resolved SB3 class (handle `_base` aliases)
+- [x] Fail fast at config-load time with clear errors
+
+## Phase 2.6: Tests (`tests/`)
+
+- [x] Add `pytest` dependency, create `tests/` dir with `conftest.py`
+- [x] `test_config.py`: resolve_algo_config, validate_algo_kwargs, is_compatible, expand_matrix
+- [x] `test_runner.py`: PPO + CartPole integration test (small timesteps), verify model save and RunResult
 
 ## Phase 3: Tracking (`rl_experiments/tracking.py`)
 
 - [ ] Post-training logging: params, `evaluate_policy()` metrics, artifacts
 - [ ] Skip-if-exists: query MLFlow for matching params before launching a run
 - [ ] Local file-based setup (`./mlruns/`)
+- [ ] Test skip-if-exists with duplicate run
 
 ## Phase 4: CLI Entry Point (`rl_experiments/__main__.py`)
 
 - [ ] Load config, expand matrix, loop with per-run error handling
 - [ ] Progress logging
 - [ ] `--dry-run` mode
+- [ ] Test --dry-run outputs matrix without training
 
 ## Phase 5: Analysis (`rl_experiments/analysis.py`)
 
