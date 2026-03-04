@@ -59,6 +59,15 @@ Based on `experiment_runner_plan.md`. Parallelism is out of scope for now.
 - [x] Summary table
 - [x] `--analyze` CLI flag
 
+## Phase 5.5: Live MLFlow Training Monitoring
+
+- [x] `MlflowEvalCallback` in `tracking.py`: subclass `EvalCallback`, log eval metrics per step
+- [x] Restructure run lifecycle: `start_mlflow_run` context manager + `log_run_artifacts`
+- [x] Update `runner.py` to use `MlflowEvalCallback`
+- [x] Update `__main__.py` to wrap training in `start_mlflow_run`
+- [x] Update `tests/test_tracking.py` for new API
+- [x] Document live monitoring in `README.md`
+
 ## Phase 6: Integration & Polish
 
 - [ ] End-to-end test: full config through all phases

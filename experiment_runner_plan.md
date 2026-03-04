@@ -232,9 +232,40 @@ Query MLFlow via `MlflowClient`, group by `(env, algo)`, aggregate across seeds.
 
 ---
 
-## Future Extensions
+## Phase 7: Live MLFlow Training Monitoring
 
-- **Live training monitoring**: Log metrics to MLFlow step-by-step during training (not just post-training). Could use a custom SB3 callback that calls `mlflow.log_metric(..., step=timestep)` at each eval point for real-time curves in the MLFlow UI.
+Currently MLFlow logging is post-training only (final eval metrics + artifacts). This phase adds step-by-step metric logging during training so the MLFlow UI shows learning curves, not just single final values.
+
+**Key change**: The MLFlow run must be open *during* training, not just after. This means restructuring the run lifecycle.
+
+### Approach
+
+1. **`MlflowEvalCallback`** in `tracking.py` -- subclass SB3's `EvalCallback`, override `_on_step` to log eval metrics to MLFlow with `step=self.num_timesteps` after each evaluation.
+
+2. **Restructure run lifecycle** -- split `log_run()` into:
+   - `start_mlflow_run(config)` context manager: opens run, logs params
+   - `log_run_artifacts(result)`: logs post-training artifacts within the already-open run
+
+3. **Update `__main__.py`** flow:
+   ```python
+   with start_mlflow_run(config):
+       result = run_experiment(config)   # callback logs live metrics
+       log_run_artifacts(result)         # post-training artifacts
+   ```
+
+4. **Update `runner.py`** -- use `MlflowEvalCallback` instead of plain `EvalCallback`.
+
+### Files to modify
+
+- `tracking.py` -- add callback + context manager, refactor `log_run`
+- `runner.py` -- swap callback class
+- `__main__.py` -- wrap training in context manager
+- `tests/test_tracking.py` -- update for new API
+- `README.md` -- document live monitoring in the MLFlow section
+
+---
+
+## Future Extensions
 - **Curiosity wrappers**: SB3 doesn't include ICM/RND natively. These can be implemented as Gymnasium reward wrappers that add an intrinsic reward component. This would appear in the config as an `env_wrappers` list under each experiment.
 - **Hyperparameter sweeps**: Integrate Optuna by turning algorithm config values into search spaces (e.g. `learning_rate: [0.0001, 0.001]` triggers a sweep). MLFlow parent/child runs can group sweep trials.
 - **Custom callbacks**: Episode video recording, gradient norm tracking, or early stopping on plateau.

@@ -1,11 +1,14 @@
 """MLFlow tracking for RL experiments."""
 
 import logging
+from contextlib import contextmanager
 from typing import Any
 
 import gymnasium as gym
 import mlflow
+import numpy as np
 from mlflow.tracking import MlflowClient
+from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 
 from rl_experiments.config import RunConfig
@@ -52,42 +55,73 @@ def run_exists(config: RunConfig) -> bool:
     return len(runs) > 0
 
 
-def log_run(result: RunResult) -> None:
-    """Log a completed run to MLFlow: params, eval metrics, artifacts."""
-    config = result.config
+class MlflowEvalCallback(EvalCallback):
+    """EvalCallback that also logs eval metrics to the active MLFlow run."""
 
+    def _on_step(self) -> bool:
+        result = super()._on_step()
+
+        # After parent runs evaluation, it stores results in evaluations_
+        # Check if a new evaluation was recorded this step
+        if hasattr(self, "evaluations_timesteps") and len(self.evaluations_timesteps) > 0:
+            last_timestep = self.evaluations_timesteps[-1]
+            if last_timestep == self.num_timesteps:
+                mean_reward = float(np.mean(self.evaluations_results[-1]))
+                std_reward = float(np.std(self.evaluations_results[-1]))
+                mlflow.log_metrics(
+                    {
+                        "eval/mean_reward": mean_reward,
+                        "eval/std_reward": std_reward,
+                    },
+                    step=self.num_timesteps,
+                )
+
+        return result
+
+
+@contextmanager
+def start_mlflow_run(config: RunConfig):
+    """Context manager that opens an MLFlow run and logs params."""
     mlflow.set_experiment(config.experiment_name)
 
-    with mlflow.start_run(run_name=f"{config.algo_name}_{config.env_id}_seed{config.seed}"):
+    with mlflow.start_run(
+        run_name=f"{config.algo_name}_{config.env_id}_seed{config.seed}"
+    ):
         mlflow.log_params(_run_params(config))
         mlflow.log_param("total_timesteps", config.total_timesteps)
+        yield
 
-        # Evaluate the trained model
-        algo_cls = ALGO_MAP[config.algo_class]
-        model = algo_cls.load(result.model_path)
 
-        eval_env = gym.make(config.env_id)
-        mean_reward, std_reward = evaluate_policy(
-            model, eval_env, n_eval_episodes=config.n_eval_episodes
-        )
-        eval_env.close()
+def log_run_artifacts(result: RunResult) -> None:
+    """Log post-training artifacts and final eval to the active MLFlow run."""
+    config = result.config
 
-        mlflow.log_metrics({
-            "eval/mean_reward": mean_reward,
-            "eval/std_reward": std_reward,
-        })
+    # Final evaluation of the trained model
+    algo_cls = ALGO_MAP[config.algo_class]
+    model = algo_cls.load(result.model_path)
 
-        # Log artifacts
-        model_zip = result.model_path + ".zip"
-        mlflow.log_artifact(model_zip)
+    eval_env = gym.make(config.env_id)
+    mean_reward, std_reward = evaluate_policy(
+        model, eval_env, n_eval_episodes=config.n_eval_episodes
+    )
+    eval_env.close()
 
-        evaluations_path = f"{result.log_dir}/evaluations.npz"
-        try:
-            mlflow.log_artifact(evaluations_path)
-        except Exception:
-            logger.warning(f"Could not log evaluations artifact: {evaluations_path}")
+    mlflow.log_metrics({
+        "eval/mean_reward": mean_reward,
+        "eval/std_reward": std_reward,
+    })
 
-        logger.info(
-            f"Logged {config.algo_name}/{config.env_id}/seed{config.seed}: "
-            f"mean_reward={mean_reward:.2f} +/- {std_reward:.2f}"
-        )
+    # Log artifacts
+    model_zip = result.model_path + ".zip"
+    mlflow.log_artifact(model_zip)
+
+    evaluations_path = f"{result.log_dir}/evaluations.npz"
+    try:
+        mlflow.log_artifact(evaluations_path)
+    except Exception:
+        logger.warning(f"Could not log evaluations artifact: {evaluations_path}")
+
+    logger.info(
+        f"Logged {config.algo_name}/{config.env_id}/seed{config.seed}: "
+        f"mean_reward={mean_reward:.2f} +/- {std_reward:.2f}"
+    )

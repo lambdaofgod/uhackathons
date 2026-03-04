@@ -1,20 +1,38 @@
 experiments:
-  - name: discrete_sparse
+  - name: discrete_dense
     problems:
       - CartPole-v1
-      - MountainCar-v0
       - LunarLander-v3
+      - Acrobot-v1
     algorithms:
       - dqn
       - ppo
+      - a2c
+      - reinforce
 
-  - name: continuous_control
+  - name: discrete_sparse
+    problems:
+      - FrozenLake-v1
+      - Taxi-v3
+      - CliffWalking-v1
+    algorithms:
+      - dqn
+      - ppo
+      - a2c
+      - reinforce
+
+  - name: continuous_dense
     problems:
       - Pendulum-v1
       - LunarLanderContinuous-v3
+      # Uncomment if MuJoCo is installed:
+      # - HalfCheetah-v4
+      # - Hopper-v4
     algorithms:
       - ppo
       - a2c
+      - reinforce
+
 
 training:
   total_timesteps: 100_000

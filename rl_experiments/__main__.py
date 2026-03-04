@@ -6,7 +6,13 @@ import logging
 from rl_experiments.analysis import print_summary
 from rl_experiments.config import expand_matrix, load_config
 from rl_experiments.runner import run_experiment
-from rl_experiments.tracking import log_run, run_exists, setup_tracking
+from rl_experiments.tracking import (
+    MlflowEvalCallback,
+    log_run_artifacts,
+    run_exists,
+    setup_tracking,
+    start_mlflow_run,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +74,9 @@ def main() -> None:
 
         try:
             logger.info(f"{tag} Starting: {run.algo_name}/{run.env_id}/seed{run.seed}")
-            result = run_experiment(run)
-            log_run(result)
+            with start_mlflow_run(run):
+                result = run_experiment(run, eval_callback_class=MlflowEvalCallback)
+                log_run_artifacts(result)
             completed += 1
         except Exception:
             logger.exception(f"{tag} Failed: {run.algo_name}/{run.env_id}/seed{run.seed}")

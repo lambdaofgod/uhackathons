@@ -4,7 +4,13 @@ import pytest
 
 from rl_experiments.config import RunConfig
 from rl_experiments.runner import run_experiment
-from rl_experiments.tracking import log_run, run_exists, setup_tracking
+from rl_experiments.tracking import (
+    MlflowEvalCallback,
+    log_run_artifacts,
+    run_exists,
+    setup_tracking,
+    start_mlflow_run,
+)
 
 
 @pytest.fixture
@@ -44,8 +50,11 @@ class TestSkipIfExists:
     def test_run_exists_true_after_logging(self, cartpole_run_config, tmp_path):
         setup_tracking(str(tmp_path / "mlruns"))
 
-        result = run_experiment(cartpole_run_config)
-        log_run(result)
+        with start_mlflow_run(cartpole_run_config):
+            result = run_experiment(
+                cartpole_run_config, eval_callback_class=MlflowEvalCallback
+            )
+            log_run_artifacts(result)
 
         assert run_exists(cartpole_run_config) is True
 
@@ -54,8 +63,11 @@ class TestSkipIfExists:
         """After logging, run_exists returns True so a second run would be skipped."""
         setup_tracking(str(tmp_path / "mlruns"))
 
-        result = run_experiment(cartpole_run_config)
-        log_run(result)
+        with start_mlflow_run(cartpole_run_config):
+            result = run_experiment(
+                cartpole_run_config, eval_callback_class=MlflowEvalCallback
+            )
+            log_run_artifacts(result)
 
         # Simulate the CLI check
         assert run_exists(cartpole_run_config) is True

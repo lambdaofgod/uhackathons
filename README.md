@@ -40,7 +40,7 @@ Then open http://127.0.0.1:5000 in your browser. You will see:
 - **Experiments** in the left sidebar (e.g. `discrete_sparse`, `continuous_control`)
 - **Runs** listed per experiment, one per `(algorithm, environment, seed)` combo
 - **Params** tab: algorithm name, env_id, seed, all hyperparameters
-- **Metrics** tab: `eval/mean_reward` and `eval/std_reward`
+- **Metrics** tab: `eval/mean_reward` and `eval/std_reward` logged at each evaluation step during training, so you get learning curves (not just a single final value)
 - **Artifacts** tab: saved model `.zip` and evaluation data
 
 To compare runs, select multiple runs with the checkboxes and click "Compare".
@@ -84,6 +84,16 @@ Key config features:
 - **Compatibility filtering**: DQN is automatically skipped for continuous action spaces
 - **Direct SB3 kwargs**: algorithm config maps directly to Stable Baselines 3 constructor arguments
 
+## Analysis
+
+After running experiments, print a summary table and save per-environment comparison plots:
+
+```bash
+uv run python -m rl_experiments --analyze
+```
+
+This outputs a table of mean reward per `(environment, algorithm)` aggregated across seeds, and saves bar charts to `./results/`.
+
 ## Tests
 
 ```bash
@@ -102,7 +112,8 @@ rl_experiments/
   __main__.py      # CLI entry point
   config.py        # YAML parsing, matrix expansion
   runner.py        # SB3 training execution
-  tracking.py      # MLFlow logging
+  tracking.py      # MLFlow logging + live training callback
+  analysis.py      # Cross-run comparison plots and tables
 experiments.yaml        # Full experiment config
 experiments_quick.yaml  # Quick validation config (tiny timesteps)
 ```

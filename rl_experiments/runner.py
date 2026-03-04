@@ -11,6 +11,9 @@ from stable_baselines3.common.monitor import Monitor
 
 from rl_experiments.config import RunConfig
 
+# Type alias -- callers can pass MlflowEvalCallback (a subclass) via this param
+EvalCallbackClass = type[EvalCallback]
+
 logger = logging.getLogger(__name__)
 
 ALGO_MAP = {
@@ -28,7 +31,10 @@ class RunResult:
     model_path: str
 
 
-def run_experiment(config: RunConfig) -> RunResult:
+def run_experiment(
+    config: RunConfig,
+    eval_callback_class: EvalCallbackClass = EvalCallback,
+) -> RunResult:
     """Execute a single training run from a RunConfig."""
     os.makedirs(config.log_dir, exist_ok=True)
 
@@ -44,7 +50,7 @@ def run_experiment(config: RunConfig) -> RunResult:
         **config.algo_kwargs,
     )
 
-    eval_callback = EvalCallback(
+    eval_callback = eval_callback_class(
         eval_env,
         eval_freq=config.eval_freq,
         n_eval_episodes=config.n_eval_episodes,
