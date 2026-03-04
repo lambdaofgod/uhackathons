@@ -40,17 +40,17 @@ Based on `experiment_runner_plan.md`. Parallelism is out of scope for now.
 
 ## Phase 3: Tracking (`rl_experiments/tracking.py`)
 
-- [ ] Post-training logging: params, `evaluate_policy()` metrics, artifacts
-- [ ] Skip-if-exists: query MLFlow for matching params before launching a run
-- [ ] Local file-based setup (`./mlruns/`)
-- [ ] Test skip-if-exists with duplicate run
+- [x] Post-training logging: params, `evaluate_policy()` metrics, artifacts
+- [x] Skip-if-exists: query MLFlow for matching params before launching a run
+- [x] Local file-based setup (`./mlruns/`)
+- [x] Test skip-if-exists with duplicate run
 
 ## Phase 4: CLI Entry Point (`rl_experiments/__main__.py`)
 
-- [ ] Load config, expand matrix, loop with per-run error handling
-- [ ] Progress logging
-- [ ] `--dry-run` mode
-- [ ] Test --dry-run outputs matrix without training
+- [x] Load config, expand matrix, loop with per-run error handling
+- [x] Progress logging
+- [x] `--dry-run` mode
+- [x] Test --dry-run outputs matrix without training
 
 ## Phase 5: Analysis (`rl_experiments/analysis.py`)
 
