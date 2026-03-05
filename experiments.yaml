@@ -12,9 +12,10 @@ experiments:
 
   - name: discrete_sparse
     problems:
-      - FrozenLake-v1
-      - Taxi-v3
-      - CliffWalking-v1
+      - env_id: FrozenLake-v1
+        total_timesteps: 500_000
+      - env_id: Taxi-v3
+        total_timesteps: 500_000
     algorithms:
       - dqn
       - ppo

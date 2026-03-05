@@ -48,9 +48,14 @@ class TrainingConfig(BaseModel):
     log_dir: str
 
 
+class ProblemConfig(BaseModel):
+    env_id: str
+    total_timesteps: int | None = None
+
+
 class ExperimentGroup(BaseModel):
     name: str
-    problems: list[str]
+    problems: list[str | ProblemConfig]
     algorithms: list[str]
 
 
@@ -150,7 +155,14 @@ def expand_matrix(config: FullConfig) -> list[RunConfig]:
     run_configs: list[RunConfig] = []
 
     for group in config.experiments:
-        for env_id in group.problems:
+        for problem in group.problems:
+            if isinstance(problem, ProblemConfig):
+                env_id = problem.env_id
+                timesteps = problem.total_timesteps or training.total_timesteps
+            else:
+                env_id = problem
+                timesteps = training.total_timesteps
+
             for algo_name in group.algorithms:
                 if not is_compatible(env_id, algo_name):
                     warnings.warn(
@@ -177,7 +189,7 @@ def expand_matrix(config: FullConfig) -> list[RunConfig]:
                             algo_class=algo_class,
                             algo_kwargs=algo_kwargs,
                             seed=seed,
-                            total_timesteps=training.total_timesteps,
+                            total_timesteps=timesteps,
                             eval_freq=training.eval_freq,
                             n_eval_episodes=training.n_eval_episodes,
                             log_dir=log_dir,

@@ -58,6 +58,7 @@ Based on `experiment_runner_plan.md`. Parallelism is out of scope for now.
 - [x] Comparison plots: one figure per env, bar chart with std error bars
 - [x] Summary table
 - [x] `--analyze` CLI flag
+- [x] Log comparison plots and summary CSV to MLFlow as artifacts
 
 ## Phase 5.5: Live MLFlow Training Monitoring
 

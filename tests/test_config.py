@@ -5,6 +5,7 @@ import pytest
 from rl_experiments.config import (
     ExperimentGroup,
     FullConfig,
+    ProblemConfig,
     TrainingConfig,
     expand_matrix,
     is_compatible,
@@ -182,3 +183,29 @@ class TestExpandMatrix:
         assert run.eval_freq == 500
         assert run.n_eval_episodes == 2
         assert "policy" in run.algo_kwargs
+
+    def test_per_problem_timesteps_override(self, minimal_algorithms):
+        config = FullConfig(
+            experiments=[
+                ExperimentGroup(
+                    name="test",
+                    problems=[
+                        "CartPole-v1",
+                        ProblemConfig(env_id="MountainCar-v0", total_timesteps=500_000),
+                    ],
+                    algorithms=["ppo"],
+                )
+            ],
+            training=TrainingConfig(
+                total_timesteps=1000,
+                n_eval_episodes=2,
+                eval_freq=500,
+                n_seeds=1,
+                log_dir="/tmp/test",
+            ),
+            algorithms=minimal_algorithms,
+        )
+        runs = expand_matrix(config)
+        by_env = {r.env_id: r for r in runs}
+        assert by_env["CartPole-v1"].total_timesteps == 1000
+        assert by_env["MountainCar-v0"].total_timesteps == 500_000

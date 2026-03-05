@@ -3,6 +3,7 @@
 import logging
 
 import matplotlib.pyplot as plt
+import mlflow
 import pandas as pd
 from mlflow.tracking import MlflowClient
 
@@ -103,6 +104,19 @@ def print_summary(tracking_uri: str = "./mlruns", output_dir: str = "./results")
     print(table.to_string(index=False, float_format="%.2f"))
     print()
 
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+    summary_path = os.path.join(output_dir, "summary.csv")
+    table.to_csv(summary_path, index=False)
+    print(f"Saved summary table to {summary_path}")
+
     plots = plot_comparison(df, output_dir)
     if plots:
         print(f"Saved {len(plots)} comparison plot(s) to {output_dir}/")
+
+    mlflow.set_experiment("analysis")
+    with mlflow.start_run(run_name="comparison_plots"):
+        mlflow.log_artifact(summary_path)
+        for path in plots:
+            mlflow.log_artifact(path)
+        logger.info(f"Logged summary + {len(plots)} plot(s) to MLFlow 'analysis' experiment")
